@@ -1,0 +1,113 @@
+.requests-container {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.requests-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  width: 100%;
+  max-width: 600px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.requests-alert.success {
+  background: #e6ffed;
+  color: #276749;
+}
+
+.requests-alert.error {
+  background: #fff5f5;
+  color: #9b2c2c;
+}
+
+.requests-form,
+.requests-viewCard {
+  background: #fff;
+  padding: 25px 30px;
+  border-radius: 8px;
+  box-shadow: rgba(0, 0, 0, 0.1) 0 4px 16px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.requests-form h2,
+.requests-viewCard h2 {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.requests-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 16px;
+}
+
+.requests-input {
+  margin-top: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.requests-fieldset {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 16px;
+}
+
+.requests-weekGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.requests-checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.requests-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.requests-btn.save {
+  background: #007bff;
+  color: #fff;
+  margin-right: 10px;
+}
+
+.requests-btn.cancel {
+  background: #aaa;
+  color: #fff;
+}
+
+.requests-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.requests-btn.edit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #2d3748;
+  color: #fff;
+}
+
+.requests-viewCard p {
+  margin: 8px 0;
+}

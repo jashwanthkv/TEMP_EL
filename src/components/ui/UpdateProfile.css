@@ -1,0 +1,98 @@
+/* src/components/ui/UpdateProfile.css */
+
+.update-profile-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to right, #e0eafc, #cfdef3);
+  padding: 20px;
+}
+
+.update-profile-form {
+  background: #fff;
+  padding: 30px 40px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+}
+
+.update-profile-form h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.update-profile-form .form-group {
+  margin-bottom: 15px;
+}
+
+.update-profile-form .form-group label {
+  display: block;
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 5px;
+}
+
+.update-profile-form .form-group input[type="text"],
+.update-profile-form .form-group input[type="email"],
+.update-profile-form .form-group input[type="tel"],
+.update-profile-form .form-group input[type="file"] {
+  width: 100%;
+  padding: 10px;
+  font-size: 0.94rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  transition: border-color 0.2s;
+}
+
+.update-profile-form .form-group input:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.update-profile-form .preview-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.update-profile-form .preview-container img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid #007bff;
+}
+
+.update-profile-form button {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  color: #fff;
+  background-color: #007bff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.update-profile-form button:hover:enabled {
+  background-color: #0056b3;
+}
+
+.update-profile-form button:disabled {
+  background-color: #aaa;
+  cursor: not-allowed;
+}
+
+.update-profile-form .error {
+  color: red;
+  margin-top: 10px;
+}
+
+.update-profile-form .success {
+  color: green;
+  margin-top: 10px;
+}
