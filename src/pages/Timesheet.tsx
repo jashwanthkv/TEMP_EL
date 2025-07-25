@@ -16,7 +16,7 @@ import {  Bell, Home, User, UserCircle } from 'lucide-react';
 
 
 const COLORS = ['#FF69B4', '#FFA500', '#00CED1', '#4CAF50', '#8E44AD'];
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwJfy5mcqLBKvpydq9aRWw5L5mOdsat743LLRwdFvKbuv6DtM9w1f1YMbvNWbUloo8VyA/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyo3pCBPS_ZvK6h4kQbmOU_cZtUnEr4Lw_SbuPZ9Zi3C6pLsk0CFxMYA196bvFwY0XcvA/exec";
 
 // Project names in consistent order for color assignment
 const PROJECT_NAMES = ['Alpha', 'Beta', 'Gamma', 'Delta'];
@@ -1371,7 +1371,7 @@ useEffect(() => {
             <CardHeader><CardTitle>Add Completed Entry</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label>Project</Label>
+                <Label className="mb-2 block">Project</Label>
                 <Select value={addEntryProject} onValueChange={setAddEntryProject}>
                   <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
                   <SelectContent>
@@ -1384,11 +1384,12 @@ useEffect(() => {
               </div>
               <div>
                 <Label>Task Description</Label>
-                <Textarea value={addEntryTask} onChange={(e) => setAddEntryTask(e.target.value)} placeholder="Describe your work..." />
+                <Textarea value={addEntryTask} onChange={(e) => setAddEntryTask(e.target.value)} placeholder="Describe your work..." 
+                  className="mt-1"/>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Start Time</Label>
+                  <Label className="mb-2 block">Start Time</Label>
                   <Input 
                     type="time" 
                     value={addEntryStartTime} 
@@ -1396,7 +1397,7 @@ useEffect(() => {
                   />
                 </div>
                 <div>
-                  <Label>End Time</Label>
+                  <Label className="mb-2 block">End Time</Label>
                   <Input 
                     type="time" 
                     value={addEntryEndTime} 
@@ -1439,8 +1440,8 @@ useEffect(() => {
             <CardHeader><CardTitle>Project Check-in</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label>Project</Label>
-                <Select value={project} onValueChange={setProject}>
+                <Label className="mb-2 block">Project </Label>
+                <Select value={project} onValueChange={setProject} >
                   <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Alpha">Alpha</SelectItem>
@@ -1452,7 +1453,8 @@ useEffect(() => {
               </div>
               <div>
                 <Label>Task Description</Label>
-                <Textarea value={task} onChange={(e) => setTask(e.target.value)} placeholder="Describe your work..." />
+                <Textarea value={task} onChange={(e) => setTask(e.target.value)} placeholder="Describe your work..."
+                className="mt-1" />
               </div>
               <div className="flex gap-2">
                 <Button 

@@ -49,11 +49,10 @@ const AdminPanel = () => {
 
   const sidebarItems = [
     { title: 'Manage Employees', icon: Users, path: '/manage-employees' },
-    { title: 'Approve Leaves', icon: CheckCircle, path: '/admin/leaves' },
-    { title: 'Time sheet', icon: Clock, path: '' },
+    { title: 'Manage Leaves', icon: CheckCircle, path: '/admin/leaves' },
+    { title: 'Time sheet', icon: Clock, path: '/admin/timesheet' },
     { title: 'Performance Review', icon: BarChart3, path: '/admin/performance' },
-    { title: 'Admin Calendar', icon: Calendar, path: '/admin/calendar' },
-    { title: 'Manage Holidays', icon: Calendar, path: '/admin/holidays' },
+    { title: 'Company Calendar', icon: Calendar, path: '/admin/calendar' },
     { title: 'Training & Courses', icon: Book, path: '/admin/training' },
     { title: 'Company Achievements', icon: BarChart2, path: '/admin/company' },
     { title: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
@@ -140,7 +139,7 @@ useEffect(() => {
       {/* View Profile */}
       <button
         onClick={() => {
-          navigate('/profile');
+          navigate('/admin/profile');
           setIsProfileOpen(false);
         }}
         className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"

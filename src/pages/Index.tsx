@@ -79,13 +79,17 @@ const Index = () => {
         const displayName = employee.EMP_NAME || emailLower.split('@')[0];
         const empId = employee.EMP_ID || 'EMP001';
         const spreadsheetId = employee.SHEETID || '';
+        const status = employee.STATE || '';
+        const emptype = employee.ROLE ||'';
 
         localStorage.setItem('userRole', role);
         localStorage.setItem('userName', displayName);
         localStorage.setItem('userEmail', emailLower);
         localStorage.setItem('userId', empId);
         localStorage.setItem('userPassword', password); // Store password for backend authentication
-        
+        localStorage.setItem('userStatus', status);
+        localStorage.setItem('userRole', emptype)
+          
         // Store spreadsheet ID if available
         if (spreadsheetId) {
           localStorage.setItem('spreadsheetId', spreadsheetId);

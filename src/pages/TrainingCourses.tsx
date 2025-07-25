@@ -162,7 +162,7 @@ const TrainingCourses = () => {
 
         {/* Suggested Courses */}
         <section>
-          <h3 className="text-xl font-semibold text-gray-800 mb-3">🎓 Suggested Courses</h3>
+          <h3 className="text-xl font-bold text-gray-800 mb-3"> Suggested Courses</h3>
           <div className="overflow-x-auto pb-2">
             <div className="flex gap-5 w-max">
               {filteredCourses.map((course, idx) => (
@@ -189,7 +189,7 @@ const TrainingCourses = () => {
                           rel="noopener noreferrer"
                           className="flex-1 text-center text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-full px-3 py-2"
                         >
-                          Go to Course
+                          Details
                         </a>
                       ) : (
                         <span className="flex-1 text-center text-xs text-red-500 pt-2">Link not available</span>
@@ -204,7 +204,7 @@ const TrainingCourses = () => {
 
         {/* Enrolled */}
         <section>
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">📚 Enrolled Courses ({enrolledCourses.length})</h3>
+          <h3 className="text-xl font-bold text-gray-800 mb-4">Enrolled Courses ({enrolledCourses.length})</h3>
           {enrolledCourses.length === 0 ? (
             <p className="text-gray-500">You have not enrolled in any courses yet.</p>
           ) : (
@@ -238,13 +238,13 @@ const TrainingCourses = () => {
 
         {/* Completed */}
         <section>
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">🏁 Completed Courses ({completedCourses.length})</h3>
+          <h3 className="text-xl font-bold text-gray-800 mb-4">Completed Courses ({completedCourses.length})</h3>
           {completedCourses.length === 0 ? (
             <p className="text-gray-500">You haven't completed any courses yet.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {completedCourses.map((course) => (
-                <Card key={course.name} className="p-4 rounded-xl border shadow-sm bg-green-50">
+                <Card key={course.name} className="p-4 rounded-xl border shadow-sm bg-gray-100">
                   <div>
                     <h4 className="font-semibold text-lg">{course.name}</h4>
                     <p className="text-sm text-gray-500">Platform: {course.platform}</p>

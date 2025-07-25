@@ -334,7 +334,10 @@ const LeaveManagement = () => {
     initializePage();
   }, []);
 
-  const selectedBalance = balance[leaveType as keyof typeof balance] || { total: 0, used: 0 };
+ const selectedBalance = leaveType === 'unpaid'
+  ? { total: Infinity, used: 0 }
+  : balance[leaveType as keyof typeof balance] || { total: 0, used: 0 };
+
   
   // Calculate requested days with proper handling for half-day vs full-day
   const calculateRequestedDays = () => {
@@ -353,7 +356,7 @@ const LeaveManagement = () => {
   };
   
   const requestedDays = calculateRequestedDays();
-  const overLimit = requestedDays > (selectedBalance.total - selectedBalance.used);
+  const overLimit = leaveType !== 'unpaid' && requestedDays > (selectedBalance.total - selectedBalance.used);
 
   const handleInitialSubmit = async () => {
     if (!leaveType || !fromDate || !toDate || !reason) {
@@ -383,10 +386,12 @@ const LeaveManagement = () => {
       // Convert leave type key to readable format for backend
       const leaveTypeMapping = {
         'sick': 'Sick',
-        'casual': 'Casual', 
+        'casual': 'Casual',
         'annual': 'Earned',
-        'compensation': 'Compensation'
+        'compensation': 'Compensation',
+        'unpaid': 'Leave Without Pay', // 👈 Add this
       };
+
       
       const mappedLeaveType = leaveTypeMapping[leaveType as keyof typeof leaveTypeMapping] || leaveType;
       
@@ -582,9 +587,13 @@ const LeaveManagement = () => {
             <Select value={leaveType} onValueChange={setLeaveType}>
               <SelectTrigger><SelectValue placeholder="Choose leave type" /></SelectTrigger>
               <SelectContent>
+                <>
                 {Object.entries(balance).map(([key, b]) => (
                   <SelectItem key={key} value={key}>{b.name}</SelectItem>
                 ))}
+                <SelectItem value="unpaid">Leave Without Pay</SelectItem>
+              </>
+
               </SelectContent>
             </Select>
             <div className="grid grid-cols-2 gap-4">

@@ -45,19 +45,26 @@ const Dashboard = () => {
   const profileRef = useRef<HTMLDivElement>(null);
 
   // Optional: Close dropdown when clicking outside
-  React.useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setIsProfileOpen(false);
+  useEffect(() => {
+  const empId = localStorage.getItem('userId') || '4';
+
+  fetch(`${scriptUrl}?EMP_ID=${empId}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.IMAGE_URL) {
+        fetch(`${scriptUrl}?fileId=${data.IMAGE_URL}`)
+          .then(res => res.text())
+          .then(dataUri => setProfileImage(dataUri))
+          .catch(err => console.error('Failed to fetch profile image:', err));
       }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    })
+    .catch(err => console.error('Failed to fetch profile data:', err));
+}, []);
+
   const [newsData, setNewsData] = useState<NewsItem[]>([]);
   useEffect(() => {
   fetch(
-    'https://script.google.com/macros/s/AKfycbx3rFLwNdhj6rqkNpTMcMuHqU18RjeG5ELhpQi0144BylNAGQ5TuT9QHDu_TX8G2jhk/exec?action=getNews'
+    'https://script.google.com/macros/s/AKfycbzO3pTy2RQCzh5DFNVm83wpSYkyHf9t4dsA25ibY72-nrUxcBy6SQafJvqejicFvZCj/exec?action=getNews'
   )
     .then((res) => res.json())
     .then((data) => {
@@ -182,16 +189,62 @@ const Dashboard = () => {
     },
   };
 
-  const upcomingHolidays = [
-    { date: '2025-08-15', event: 'Independence Day' },
-    { date: '2025-09-07', event: 'Ganesh Chaturthi' },
-    { date: '2025-10-02', event: 'Gandhi Jayanti' },
-    { date: '2025-10-31', event: 'Diwali' },
-    { date: '2025-12-25', event: 'Christmas Day' },
-  ];
+  const [upcomingHolidays, setUpcomingHolidays] = useState([]);
+  const [holidayDates, setHolidayDates] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const holidayCache = {};
+  const fetchHolidaysForMonth = async (month, year) => {
+  const cacheKey = `${year}-${String(month).padStart(2, '0')}`;
 
-  const holidayDates = upcomingHolidays.map(h => new Date(h.date).toDateString());
+  // If data is cached, use it directly
+  if (holidayCache[cacheKey]) {
+    setUpcomingHolidays(holidayCache[cacheKey].upcomingHolidays);
+    setHolidayDates(holidayCache[cacheKey].holidayDates);
+    return;
+  }
 
+  setLoading(true);
+  try {
+    const dateString = `${year}-${String(month).padStart(2, '0')}-01`;
+    const response = await fetch(
+      `https://script.google.com/macros/s/AKfycbzqbF6hOx0KmXNoN51DoE-aIhDoy70d7_rDzeacejz1i_4ES7Nmt9JdVE4DjWWkw3Og/exec?action=getHolidays&date=${dateString}`
+    );
+    const data = await response.json();
+
+    const dateStrings = data.map(h => {
+      const [dd, mm, yyyy] = h.date.split('/');
+      return `${yyyy}-${mm}-${dd}`;
+    });
+
+    // Set to state
+    setUpcomingHolidays(data);
+    setHolidayDates(dateStrings);
+
+    // Store in cache
+    holidayCache[cacheKey] = {
+      upcomingHolidays: data,
+      holidayDates: dateStrings,
+    };
+
+  } catch (error) {
+    console.error("Failed to fetch holidays", error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+// Fetch current month on mount
+useEffect(() => {
+  const today = new Date();
+  fetchHolidaysForMonth(today.getMonth() + 1, today.getFullYear());
+
+}, []);
+
+
+const scriptUrl = 'https://script.google.com/macros/s/AKfycbzUnpG-dz3pXiQQlrG35eU2-k4kH95Rq9tRN_axyhqgRWNW0n3hfKtZtGD0JBRd7gyIxg/exec';
+const [profileImage, setProfileImage] = useState<string | null>(null);
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
@@ -253,8 +306,6 @@ const Dashboard = () => {
 
   </div>
 </header>
-
-
       <div className="flex flex-1">
         {/* Sidebar */}
         <aside className="w-64 bg-white shadow-md border-r flex flex-col">
@@ -272,10 +323,8 @@ const Dashboard = () => {
                 </div>
               );
             })}
-          </div>
-       
+          </div>  
         </aside>
-
         {/* Main Content */}
         <main className="flex-1 px-6 py-6 overflow-y-auto">
           {showPopup && (
@@ -283,39 +332,40 @@ const Dashboard = () => {
               🎉 Congratulations on your achievements!
             </div>
           )}
-
-         
           {/* Fixed News Ticker */}
       {/* Fixed News Ticker - Right to Left Animation */}
-{/* This goes directly inside your dashboard main layout, just below the top nav */}
-<div className="w-full bg-transparent px-0 -mt-2 mb-2">
-  <div className="overflow-hidden w-full">
-    <div className="flex animate-scroll-left items-center space-x-6 pl-4 pr-6">
-      {newsData.map((item, idx) => (
-        <div
-          key={idx}
-          onClick={() => setSelectedNews(item)}
-          className="min-w-[300px] bg-gradient-to-r from-[#32d399] via-[#16a085] to-[#0e7662] text-white font-semibold text-base px-6 py-3 rounded-lg shadow-md cursor-pointer hover:brightness-110 transition whitespace-nowrap"
-        >
-          {item.title}
-        </div>
-      ))}
-    </div>
-  </div>
-</div>
-
-
-
-
+          {/* This goes directly inside your dashboard main layout, just below the top nav */}
+          <div className="w-full bg-transparent px-0 -mt-2 mb-2">
+            <div className="overflow-hidden w-full">
+              <div className="flex animate-scroll-left items-center space-x-6 pl-4 pr-6">
+                {newsData.map((item, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedNews(item)}
+                    className="min-w-[300px] bg-gradient-to-r from-[#32d399] via-[#16a085] to-[#0e7662] text-white font-semibold text-base px-6 py-3 rounded-lg shadow-md cursor-pointer hover:brightness-110 transition whitespace-nowrap"
+                  >
+                    {item.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
           {/* Welcome and Working Time */}
           <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Updated Welcome Card */}
               <div className="col-span-2 bg-gradient-to-r from-[#32d399] via-[#16a085] to-[#0e7662] p-6 rounded-lg shadow flex flex-col md:flex-row items-center md:items-start gap-6">
-                <img
-                  src="/Dhanush.jpg"
-                  alt="Profile"
-                  className="w-36 h-36 rounded-full object-cover border-4 border-white shadow-md"
+                {profileImage ? (
+              <img
+                src={profileImage}
+                alt="Profile"
+                className="w-36 h-36 rounded-full object-cover border-4 border-white shadow-md"
                 />
+                ) : (
+                  <div className="w-36 h-36 rounded-full bg-green-100 flex items-center justify-center text-green-700 text-xl font-bold border-4 border-white shadow-md">
+                    {userName[0] || 'U'}
+                  </div>
+                )}
+
                 <div className="text-white text-sm space-y-2 md:text-base">
                   <p className="font-bold text-xl">{userName}</p>
                   <p className="font-bold">Employee ID: {empId}</p>
@@ -327,101 +377,21 @@ const Dashboard = () => {
 
               {/* Working Time Card */}
               <Card className="shadow-lg h-full">
-                <CardContent className="p-6 flex flex-col justify-between h-full">
-                  <div>
-                    <h3 className="text-lg font-semibold text-green-700 mb-2">Working Time</h3>
-                    <p className="text-gray-600 mb-1">This week</p>
-                    <div className="text-2xl font-bold text-green-800 mb-2">43 / 48 hours</div>
-                    <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-                      <div
-                        className="bg-green-500 h-3 rounded-full"
-                        style={{ width: `${(43 / 48) * 100}%` }}
-                      />
-                    </div>
+              <CardContent className="p-6 flex flex-col justify-between h-full">
+                <div>
+                  <h3 className="text-lg font-semibold text-green-700 mb-2">Working Time</h3>
+                  <p className="text-gray-600 mb-1">This week</p>
+                  <div className="text-2xl font-bold text-green-800 mb-2">43 / 48 hours</div>
+                  <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
+                    <div
+                      className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                      style={{ width: `${(43 / 48) * 100}%` }}
+                    />
                   </div>
-                  <button
-                  className="bg-green-100 text-green-800 px-4 py-2 rounded shadow flex items-center gap-2 hover:bg-green-200 transition"
-                  onClick={() => setShowTimeTracker(true)}
-                >
-                  <Clock className="w-4 h-4" />
-                  Time Tracker
-                </button>
-
-                </CardContent>
-              </Card>
+                </div>   
+              </CardContent>
+            </Card>
             </div>
-          
-
-{showTimeTracker && (
-  <div className="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center px-4 py-10">
-    <div className="bg-white rounded-xl shadow-lg w-full max-w-xl p-6 relative">
-      <h3 className="text-xl font-bold text-green-700 mb-4 flex items-center gap-2">
-        <Clock className="w-5 h-5" /> Time Tracker Stats
-      </h3>
-
-      <div className="space-y-4">
-        <div className="text-gray-800 text-lg">
-          Worked Hours: <strong>43 hrs</strong>
-        </div>
-        <div className="text-gray-800 text-lg">
-          Remaining Hours: <strong>5 hrs</strong>
-        </div>
-
-        {/* ✅ Enhanced Task Summary Section */}
-        <div className="bg-gray-50 border p-4 rounded-md shadow-inner">
-          <p className="font-semibold text-green-700 mb-3">Your Task Summary</p>
-          <ul className="space-y-3 text-sm text-gray-700 max-h-60 overflow-y-auto">
-            <li className="border-b pb-2">
-              <div className="flex justify-between">
-                <span className="font-semibold">Design Landing Page</span>
-                <span className="text-xs text-gray-500">2h 30m</span>
-              </div>
-              <p className="text-xs text-gray-500">
-                Project: EMPWR Redesign • Checked in at 09:00 AM, out at 11:30 AM
-              </p>
-            </li>
-            <li className="border-b pb-2">
-              <div className="flex justify-between">
-                <span className="font-semibold">Fix Timesheet Bugs</span>
-                <span className="text-xs text-gray-500">1h 45m</span>
-              </div>
-              <p className="text-xs text-gray-500">
-                Project: Internal Tools • Checked in at 12:00 PM, out at 01:45 PM
-              </p>
-            </li>
-            <li className="border-b pb-2">
-              <div className="flex justify-between">
-                <span className="font-semibold">API Integration</span>
-                <span className="text-xs text-gray-500">2h</span>
-              </div>
-              <p className="text-xs text-gray-500">
-                Project: Client Portal • Checked in at 02:00 PM, out at 04:00 PM
-              </p>
-            </li>
-            <li>
-              <div className="flex justify-between">
-                <span className="font-semibold">Daily Standup</span>
-                <span className="text-xs text-gray-500">15m</span>
-              </div>
-              <p className="text-xs text-gray-500">
-                Project: EMPWR • Checked in at 10:00 AM, out at 10:15 AM
-              </p>
-            </li>
-          </ul>
-        </div>
-      </div>
-
-      <button
-        onClick={() => setShowTimeTracker(false)}
-        className="absolute top-3 right-3 text-gray-500 hover:text-red-500"
-      >
-        ✕
-      </button>
-    </div>
-  </div>
-)}
-
-
           {/* Stat Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {statCards.map((stat, index) => (
@@ -452,45 +422,61 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 {/* Leave Summary */}
                 <div className="col-span-1 md:col-span-2 bg-white rounded-xl shadow-lg p-6 flex flex-col justify-between min-h-[360px]">
-                  <h2 className="text-xl font-bold text-green-700 mb-4 flex items-center gap-2">
-                    <CalendarIcon className="w-5 h-5 text-green-600" />
-                    Leave Summary
-                  </h2>
+  <h2 className="text-xl font-bold text-green-700 mb-4 flex items-center gap-2">
+    <CalendarIcon className="w-5 h-5 text-green-600" />
+    Leave Summary
+  </h2>
 
-                  <div className="flex flex-col lg:flex-row items-center justify-between gap-10 flex-1">
-                    {/* Pie Chart */}
-                    <div className="h-[220px] w-[220px]">
-                      <Pie data={leavePieData} options={leavePieOptions} />
-                    </div>
+  <div className="flex flex-col lg:flex-row items-center justify-between gap-10 flex-1">
+    {/* Pie Chart */}
+    <div className="h-[220px] w-[220px] relative">
+      <Pie data={leavePieData} options={{ ...leavePieOptions, plugins: { legend: { display: false } } }} />
 
-                    {/* Breakdown Cards */}
-                    <div className="flex-1 flex flex-col gap-4 w-full">
-                      <div className="bg-blue-50 rounded-lg px-4 py-3 flex items-center justify-between shadow-sm">
-                        <div>
-                          <p className="text-blue-600 font-semibold">Casual Leave</p>
-                          <p className="text-sm text-gray-600">Relax or handle personal matters</p>
-                        </div>
-                        <span className="text-2xl font-bold text-blue-700">{leaveValues[0]} days</span>
-                      </div>
+      {/* 👇 Custom Legend aligned in a single row */}
+      <div className="mt-4 flex justify-center gap-4 text-sm absolute bottom-[-36px] left-1/2 transform -translate-x-1/2">
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 bg-blue-500 rounded-sm"></span>
+          <span className="text-gray-700">Casual</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 bg-red-500 rounded-sm"></span>
+          <span className="text-gray-700">Sick</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 bg-green-500 rounded-sm"></span>
+          <span className="text-gray-700">Earned</span>
+        </div>
+      </div>
+    </div>
 
-                      <div className="bg-red-50 rounded-lg px-4 py-3 flex items-center justify-between shadow-sm">
-                        <div>
-                          <p className="text-red-600 font-semibold">Sick Leave</p>
-                          <p className="text-sm text-gray-600">For health-related absence</p>
-                        </div>
-                        <span className="text-2xl font-bold text-red-600">{leaveValues[1]} days</span>
-                      </div>
+    {/* Breakdown Cards */}
+    <div className="flex-1 flex flex-col gap-4 w-full">
+      <div className="bg-blue-50 rounded-lg px-4 py-3 flex items-center justify-between shadow-sm">
+        <div>
+          <p className="text-blue-600 font-semibold">Casual Leave</p>
+          <p className="text-sm text-gray-600">Relax or handle personal matters</p>
+        </div>
+        <span className="text-2xl font-bold text-blue-700">{leaveValues[0]} days</span>
+      </div>
 
-                      <div className="bg-green-50 rounded-lg px-4 py-3 flex items-center justify-between shadow-sm">
-                        <div>
-                          <p className="text-green-600 font-semibold">Earned Leave</p>
-                          <p className="text-sm text-gray-600">Accumulated paid leave</p>
-                        </div>
-                        <span className="text-2xl font-bold text-green-700">{leaveValues[2]} days</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+      <div className="bg-red-50 rounded-lg px-4 py-3 flex items-center justify-between shadow-sm">
+        <div>
+          <p className="text-red-600 font-semibold">Sick Leave</p>
+          <p className="text-sm text-gray-600">For health-related absence</p>
+        </div>
+        <span className="text-2xl font-bold text-red-600">{leaveValues[1]} days</span>
+      </div>
+
+      <div className="bg-green-50 rounded-lg px-4 py-3 flex items-center justify-between shadow-sm">
+        <div>
+          <p className="text-green-600 font-semibold">Earned Leave</p>
+          <p className="text-sm text-gray-600">Accumulated paid leave</p>
+        </div>
+        <span className="text-2xl font-bold text-green-700">{leaveValues[2]} days</span>
+      </div>
+    </div>
+  </div>
+</div>
 
                 {/* Holiday Calendar */}
                 <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col justify-between min-h-[360px]">
@@ -499,40 +485,53 @@ const Dashboard = () => {
                     Upcoming Holidays
                   </h2>
                   <div className="react-calendar-wrapper rounded-xl overflow-hidden">
-                    <Calendar
-                     tileClassName={({ date }) => {
-  const isHoliday = holidayDates.includes(date.toDateString());
-  const isToday = new Date().toDateString() === date.toDateString();
+                        <div className="react-calendar-wrapper rounded-xl overflow-hidden relative min-h-[320px]">
+  {loading && (
+    <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
+      <span className="text-sm text-gray-600 font-medium">Loading...</span>
+    </div>
+  )}
 
-  if (isHoliday) {
-    return 'bg-green-700 text-white font-semibold rounded-md';
-  }
+  <Calendar
+    onActiveStartDateChange={({ activeStartDate }) => {
+      const month = activeStartDate.getMonth() + 1;
+      const year = activeStartDate.getFullYear();
+      fetchHolidaysForMonth(month, year);
+    }}
+    tileClassName={({ date }) => {
+      const current = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  if (isToday) {
-    return 'bg-blue-500 text-white font-semibold rounded-md';
-  }
+      const isHoliday = holidayDates.includes(current);
+      const isToday = current === todayStr;
 
-  return '';
-}}
+      if (isToday && isHoliday) return 'bg-purple-700 text-white font-semibold rounded-md';
+      if (isHoliday) return 'bg-green-700 text-white font-semibold rounded-md';
+      if (isToday) return 'bg-blue-500 text-white font-semibold rounded-md';
 
-                      className="w-full border-none"
-                    />
+      return '';
+    }}
+    className="w-full border-none"
+  />
+</div>
+
                   </div>
                   <ul className="mt-4 text-sm text-gray-700 space-y-1">
-                    {upcomingHolidays.map((h, i) => (
-                      <li key={i}>
-                        <span className="font-medium text-green-800">{h.event}</span> –{' '}
-                        <span className="text-gray-500">{h.date}</span>
-                      </li>
+                  {upcomingHolidays.map((h, i) => (
+                  <li key={i}>
+                    <span className="font-semibold text-green-800">{h.holiday}</span>{' '}
+                    <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full ml-2">
+                      {h.type}
+                    </span>
+                  </li>
                     ))}
                   </ul>
+
                 </div>
               </div>
-
-
-
-          
-          {/* News Modal */}
+       
+      {/* News Modal */}
           {selectedNews && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4 py-8 overflow-auto">
               <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-4xl p-8 relative">
@@ -556,10 +555,6 @@ const Dashboard = () => {
         />
       )
     )}
-
-
-
-
                 <p className="text-gray-800 text-lg leading-relaxed mb-8 whitespace-pre-line">
                   {selectedNews.fullText}
                 </p>
@@ -581,6 +576,5 @@ const Dashboard = () => {
     </div>
   );
 };
-
 export default Dashboard;
 

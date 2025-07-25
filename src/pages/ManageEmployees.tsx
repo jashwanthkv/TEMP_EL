@@ -1,4 +1,57 @@
-import React, { useState } from 'react';
+// JSONP utility for Apps Script CORS workaround
+function jsonpRequest(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
+    (window as any)[callbackName] = (data: any) => {
+      resolve(data);
+      delete (window as any)[callbackName];
+      document.body.removeChild(script);
+    };
+    const script = document.createElement("script");
+    script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + callbackName;
+    script.onerror = () => {
+      reject(new Error("JSONP request failed"));
+      delete (window as any)[callbackName];
+      document.body.removeChild(script);
+    };
+    document.body.appendChild(script);
+  });
+}
+
+import React, { useState, useEffect, useRef } from 'react';
+// Backend API URL
+const EMPLOYEE_API_URL = "https://script.google.com/macros/s/AKfycby1Uip8Z5Vqn7iOYzsa1y0qH1jgYVzKDwPnJWshg5yCGdTjNBDShhb2Vp9E3ASK2qy6/exec";
+
+// Map frontend EmployeeData to backend parameter names for add
+function mapToBackendParams(data: EmployeeData) {
+  return {
+    empId: data.employeeId,
+    FirstName: data.firstName,
+    lastName: data.lastName,
+    designation: data.designation,
+    department: data.department,
+    cMailId: data.companyEmail,
+    password: "123456", // Or get from form if needed
+    MobileNo: data.mobile,
+    JoiningDate: data.joiningDate,
+    role: data.role,
+    status: data.status || "inactive", // Added status field
+    gender: data.gender,
+    dateOfBirth: data.dob,
+    pMailId: data.personalEmail,
+    communicationAddress: data.address,
+    PANCard: data.pan,
+    AadhaarCard: data.aadhaar,
+    BankName: data.bankName,
+    BankAccount: data.bankAccount,
+    IFSC: data.ifscCode,
+    SalaryGrade: data.salaryGrade,
+    UAN: data.uanNumber,
+    PF_ESI_Status: data.pfEsiStatus,
+    manager: data.reportingManager,
+  };
+}
+
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -39,6 +92,7 @@ type EmployeeData = {
   pan: string;
   passport: string;
   otherId: string;
+  status?: string; // Added status field
 };
 
 const initialData: EmployeeData = {
@@ -68,33 +122,150 @@ const initialData: EmployeeData = {
   pan: '',
   passport: '',
   otherId: '',
+  status: 'inactive',
 };
+
+type FormType = 'add' | 'update';
 
 const ManageEmployees = () => {
   const navigate = useNavigate();
-  const [formType, setFormType] = useState<'add' | 'update'>('add');
+  const [formType, setFormType] = useState<FormType>('add');
   const [employeeData, setEmployeeData] = useState<EmployeeData>({ ...initialData });
   const [updateId, setUpdateId] = useState('');
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef(null);
+  
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleChange = (field: keyof EmployeeData, value: string) => {
     setEmployeeData(prev => ({ ...prev, [field]: value }));
   };
+  
 
-  const handleFetch = () => {
-    const mockData = {
-      ...initialData,
-      firstName: 'John',
-      lastName: 'Doe',
-      employeeId: updateId,
-    };
-    setEmployeeData(mockData);
+  // Fetch employee details from backend (JSONP)
+  const handleFetch = async () => {
+    if (!updateId) return;
+    
+    const url = EMPLOYEE_API_URL + `?action=getEmployeeById&id=${encodeURIComponent(updateId)}`;
+    try {
+      const data = await jsonpRequest(url);
+      if (data.status === "found") {
+        const fetchedData = {
+          ...initialData,
+          firstName: data.employee.FirstName || '',
+          lastName: data.employee.lastName || '',
+          dob: data.employee.dateOfBirth || '',
+          gender: data.employee.gender || '',
+          mobile: data.employee.MobileNo || '',
+          personalEmail: data.employee.pMailId || '',
+          companyEmail: data.employee.cMailId || '',
+          address: data.employee.communicationAddress || '',
+          bankName: data.employee.BankName || '',
+          bankAccount: data.employee.BankAccount || '',
+          ifscCode: data.employee.IFSC || '',
+          salaryGrade: data.employee.SalaryGrade || '',
+          uanNumber: data.employee.UAN || '',
+          pfEsiStatus: data.employee.PF_ESI_Status || '',
+          joiningDate: data.employee.JoiningDate || '',
+          employmentType: '', // Not in backend
+          designation: data.employee.designation || '',
+          department: data.employee.department || '',
+          reportingManager: data.employee.manager || '',
+          role: data.employee.role || 'employee',
+          employeeId: data.employee.empId || '',
+          ctc: '', // Not in backend
+          aadhaar: data.employee.AadhaarCard || '',
+          pan: data.employee.PANCard || '',
+          passport: '', // Not in backend
+          otherId: '', // Not in backend
+          status: data.employee.status || 'inactive', // Added status
+        };
+        
+        setEmployeeData(fetchedData);
+      } else {
+        alert(data.message);
+      }
+    } catch (err) {
+      alert("Failed to fetch employee details.");
+    }
   };
 
-  const handleSubmit = () => {
+  // Add or update employee (JSONP)
+  const handleSubmit = async () => {
     if (formType === 'add') {
-      console.log('Submitting new employee:', employeeData);
-    } else {
-      console.log('Updating employee:', updateId, employeeData);
+      const params = { action: "addEmployee", ...mapToBackendParams(employeeData) };
+      const url = EMPLOYEE_API_URL + "?" + new URLSearchParams(params).toString();
+      try {
+        const data = await jsonpRequest(url);
+        alert(data.message);
+      } catch (err) {
+        alert("Failed to add employee.");
+      }
+    } else if (formType === 'update') {
+      const params = {
+        action: "update",
+        id: updateId,
+        empName: employeeData.firstName,
+        last: employeeData.lastName,
+        position: employeeData.designation,
+        dept: employeeData.department,
+        email: employeeData.companyEmail,
+        password: "123456", // Or from form
+        phone: employeeData.mobile,
+        joined: employeeData.joiningDate,
+        role: employeeData.role,
+        state: employeeData.status || "inactive", // Added status
+        gender: employeeData.gender,
+        dob: employeeData.dob,
+        pEmail: employeeData.personalEmail,
+        address: employeeData.address,
+        pan: employeeData.pan,
+        aadhar: employeeData.aadhaar,
+        bankName: employeeData.bankName,
+        accountNumber: employeeData.bankAccount,
+        ifsc: employeeData.ifscCode,
+        payLevel: employeeData.salaryGrade,
+        uan: employeeData.uanNumber,
+        pf: employeeData.pfEsiStatus,
+        reportingManager: employeeData.reportingManager,
+      };
+      const url = EMPLOYEE_API_URL + "?" + new URLSearchParams(params).toString();
+      try {
+        const data = await jsonpRequest(url);
+        alert(data.message);
+      } catch (err) {
+        alert("Failed to update employee.");
+      }
+    }
+  };
+
+  // Handle activate/deactivate employee
+  const handleStatusChange = async (newStatus: string) => {
+    if (!updateId) return;
+    
+    const params = {
+      action: "changeStatus",
+      id: updateId,
+      status: newStatus
+    };
+    
+    const url = EMPLOYEE_API_URL + "?" + new URLSearchParams(params).toString();
+    try {
+      const data = await jsonpRequest(url);
+      alert(data.message);
+      // Refresh the employee data
+      await handleFetch();
+    } catch (err) {
+      alert("Failed to change employee status.");
     }
   };
 
@@ -118,10 +289,9 @@ const ManageEmployees = () => {
   };
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-
+    <div className="bg-gray-50 min-h-screen overflow-x-hidden">
       {/* Full-width Header */}
-      <header className="w-screen bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+      <header className="bg-white shadow-sm border-b border-gray-200 px-8 py-4 flex justify-between items-center w-full">
         <div className="flex items-center gap-3">
           <img src="/logos.png" alt="Logo" className="h-10 w-auto object-contain" />
           <div>
@@ -129,181 +299,221 @@ const ManageEmployees = () => {
             <p className="text-base font-semibold text-gray-600">Manage Employees</p>
           </div>
         </div>
-
+  
         <div className="flex items-center space-x-6">
           <span className="text-lg font-bold text-green-700">EMPWR</span>
-
           <button className="relative text-green-700 hover:text-green-800">
             <Bell className="h-5 w-5" />
           </button>
-
-          <div className="relative group">
-            <button className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full">
+          <div className="relative" ref={profileRef}>
+            <button
+              onClick={() => setIsProfileOpen(prev => !prev)}
+              className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full"
+            >
               <User className="w-5 h-5 text-green-700" />
             </button>
-            <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg opacity-0 group-hover:opacity-100 group-hover:translate-y-1 transform transition-all duration-200 z-50">
-              <button
-                onClick={() => navigate('/profile')}
-                className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
-              >
-                <UserCircle className="w-4 h-4 text-green-600" />
-                View Profile
-              </button>
-            </div>
+            {isProfileOpen && (
+              <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg z-50">
+                <button
+                  onClick={() => {
+                    navigate('/admin/profile');
+                    setIsProfileOpen(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
+                >
+                  <UserCircle className="w-4 h-4 text-green-600" /> View Profile
+                </button>
+              </div>
+            )}
           </div>
-
           <button
-            onClick={() => navigate('/admin')}
             className="text-green-700 hover:bg-green-100 p-2 rounded-full transition"
+            onClick={() => navigate('/admin')}
           >
             <Home className="h-5 w-5" />
           </button>
         </div>
       </header>
 
-      {/* Toggle Buttons */}
-      <div className="flex gap-6 justify-center mt-6">
-        <Button
-          className={`rounded-full px-10 py-2 shadow-md hover:shadow-lg transition ${
-            formType === 'add'
-              ? 'bg-gradient-to-r from-green-500 to-green-700 text-white'
-              : 'bg-gray-200 text-black'
-          }`}
-          onClick={() => {
-            setFormType('add');
-            setEmployeeData({ ...initialData });
-          }}
-        >
-          Add Employee
-        </Button>
-        <Button
-          className={`rounded-full px-10 py-2 shadow-md hover:shadow-lg transition ${
-            formType === 'update'
-              ? 'bg-gradient-to-r from-green-500 to-green-700 text-white'
-              : 'bg-gray-200 text-black'
-          }`}
-          onClick={() => {
-            setFormType('update');
-            setEmployeeData({ ...initialData });
-          }}
-        >
-          Update Employee
-        </Button>
-      </div>
+      <div className="container mx-auto px-4">
+        {/* Toggle Buttons */}
+        <div className="flex gap-6 justify-center mt-6">
+          <Button
+            className={`rounded-full px-10 py-2 shadow-md hover:shadow-lg transition ${
+              formType === 'add'
+                ? 'bg-gradient-to-r from-green-500 to-green-700 text-white hover:bg-gradient-to-r hover:from-green-600 hover:to-green-800'
+                : 'bg-gray-200 text-black hover:bg-gray-300'
+            }`}
+            onClick={() => {
+              setFormType('add');
+              setEmployeeData({ ...initialData });
+            }}
+          >
+            Add Employee
+          </Button>
+          <Button
+            className={`rounded-full px-10 py-2 shadow-md hover:shadow-lg transition ${
+              formType === 'update'
+                ? 'bg-gradient-to-r from-green-500 to-green-700 text-white hover:bg-gradient-to-r hover:from-green-600 hover:to-green-800'
+                : 'bg-gray-200 text-black hover:bg-gray-300'
+            }`}
+            onClick={() => {
+              setFormType('update');
+              setEmployeeData({ ...initialData });
+            }}
+          >
+            Update Employee
+          </Button>
+        </div>
 
-      {/* Update Section */}
-      {formType === 'update' && (
+        {/* ID Input Section - Only for update */}
+        {formType === 'update' && (
+          <Card className="rounded-2xl shadow-lg bg-white max-w-5xl mx-auto mt-6">
+            <CardContent className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                <div className="flex flex-col gap-1 w-full">
+                  <label className="text-sm font-medium text-gray-700">
+                    Employee ID to Update
+                  </label>
+                  <Input
+                    className="rounded-xl border-gray-300"
+                    value={updateId}
+                    onChange={e => setUpdateId(e.target.value)}
+                  />
+                </div>
+                <Button
+                  onClick={handleFetch}
+                  disabled={!updateId.trim()}
+                  className={`text-white px-4 py-2 rounded-full shadow transition self-end ${
+                    updateId.trim()
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-gray-300 cursor-not-allowed'
+                  }`}
+                >
+                  Fetch
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Form Content */}
         <Card className="rounded-2xl shadow-lg bg-white max-w-5xl mx-auto mt-6">
           <CardContent className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+            <h3 className="text-lg font-semibold text-green-800 border-b pb-1">Basic Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderInput('First Name', 'firstName')}
+              {renderInput('Last Name', 'lastName')}
+              {renderInput('Date of Birth', 'dob', 'date')}
+              {renderInput('Gender', 'gender')}
+              {renderInput('Phone Number', 'mobile')}
+              {renderInput('Personal Email', 'personalEmail')}
+              {renderInput('Company Email', 'companyEmail')}
+              {renderInput('Address', 'address')}
+            </div>
+
+            <h3 className="text-lg font-semibold text-green-800 border-b pb-1">Payroll Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderInput('Bank Name', 'bankName')}
+              {renderInput('Account Number', 'bankAccount')}
+              {renderInput('IFSC Code', 'ifscCode')}
+              {renderInput('Salary Grade', 'salaryGrade')}
+              {renderInput('UAN Number', 'uanNumber')}
+              {renderInput('PF/ESI Status', 'pfEsiStatus')}
+            </div>
+
+            <h3 className="text-lg font-semibold text-green-800 border-b pb-1">Joining Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderInput('Joining Date', 'joiningDate', 'date')}
+              {renderInput('Employment Type', 'employmentType')}
+              {renderInput('Designation', 'designation')}
+              {renderInput('Department', 'department')}
+              {renderInput('Reporting Manager', 'reportingManager')}
               <div className="flex flex-col gap-1 w-full">
-                <label className="text-sm font-medium text-gray-700">Employee ID to Update</label>
-                <Input
-                  className="rounded-xl border-gray-300"
-                  value={updateId}
-                  onChange={e => setUpdateId(e.target.value)}
-                />
+                <label className="text-sm font-medium text-gray-700">Role</label>
+                <Select 
+                  value={employeeData.role} 
+                  onValueChange={value => handleChange('role', value)}
+                >
+                  <SelectTrigger className="rounded-xl border border-gray-300 shadow-sm">
+                    <SelectValue placeholder="Role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="employee">Employee</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <Button
-                onClick={handleFetch}
-                disabled={!updateId.trim()}
-                className={`text-white px-4 py-2 rounded-full shadow transition self-end ${
-                  updateId.trim()
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-gray-300 cursor-not-allowed'
-                }`}
-              >
-                Fetch
-              </Button>
+              {renderInput('Employee ID', 'employeeId')}
+              {renderInput('CTC', 'ctc')}
+            </div>
+
+            <h3 className="text-lg font-semibold text-green-800 border-b pb-1">ID Proofs</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderInput('Aadhaar Number', 'aadhaar')}
+              {renderInput('PAN Number', 'pan')}
+              {renderInput('Passport Number', 'passport')}
+              <div className="flex flex-col gap-1 w-full">
+                <label className="text-sm font-medium text-gray-700">Other ID Type</label>
+                <Select 
+                  value={employeeData.otherId} 
+                  onValueChange={value => handleChange('otherId', value)}
+                >
+                  <SelectTrigger className="rounded-xl border border-gray-300 shadow-sm">
+                    <SelectValue placeholder="Select Other ID Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="voter">Voter ID</SelectItem>
+                    <SelectItem value="driving">Driving License</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>
-      )}
 
-      {/* Form Section */}
-      <Card className="rounded-2xl shadow-lg bg-white max-w-5xl mx-auto mt-6">
-        <CardContent className="p-6 space-y-6">
-          <h3 className="text-lg font-semibold text-green-800 border-b pb-1">Basic Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {renderInput('First Name', 'firstName')}
-            {renderInput('Last Name', 'lastName')}
-            {renderInput('Date of Birth', 'dob', 'date')}
-            {renderInput('Gender', 'gender')}
-            {renderInput('Phone Number', 'mobile')}
-            {renderInput('Personal Email', 'personalEmail')}
-            {renderInput('Company Email', 'companyEmail')}
-            {renderInput('Address', 'address')}
-          </div>
-
-          <h3 className="text-lg font-semibold text-green-800 border-b pb-1">Payroll Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {renderInput('Bank Name', 'bankName')}
-            {renderInput('Account Number', 'bankAccount')}
-            {renderInput('IFSC Code', 'ifscCode')}
-            {renderInput('Salary Grade', 'salaryGrade')}
-            {renderInput('UAN Number', 'uanNumber')}
-            {renderInput('PF/ESI Status', 'pfEsiStatus')}
-          </div>
-
-          <h3 className="text-lg font-semibold text-green-800 border-b pb-1">Joining Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {renderInput('Joining Date', 'joiningDate', 'date')}
-            {renderInput('Employment Type', 'employmentType')}
-            {renderInput('Designation', 'designation')}
-            {renderInput('Department', 'department')}
-            {renderInput('Reporting Manager', 'reportingManager')}
-            <div className="flex flex-col gap-1 w-full">
-              <label className="text-sm font-medium text-gray-700">Role</label>
-              <Select value={employeeData.role} onValueChange={value => handleChange('role', value)}>
-                <SelectTrigger className="rounded-xl border border-gray-300 shadow-sm">
-                  <SelectValue placeholder="Role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="employee">Employee</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
+        {/* Submit Button - Only show for add/update */}
+        <div className="text-end max-w-5xl mx-auto mt-6 pb-10">
+          {formType === 'update' && employeeData.status && (
+            <div className="flex justify-start gap-4 mb-4">
+              <Button
+                onClick={() => handleStatusChange('active')}
+                disabled={employeeData.status === 'active'}
+                className={`rounded-full px-6 py-2 shadow-md transition ${
+                  employeeData.status !== 'active'
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                }`}
+              >
+                Activate
+              </Button>
+              <Button
+                onClick={() => handleStatusChange('inactive')}
+                disabled={employeeData.status === 'inactive'}
+                className={`rounded-full px-6 py-2 shadow-md transition ${
+                  employeeData.status !== 'inactive'
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                }`}
+              >
+                Deactivate
+              </Button>
             </div>
-            {renderInput('Employee ID', 'employeeId')}
-            {renderInput('CTC', 'ctc')}
-          </div>
-
-          <h3 className="text-lg font-semibold text-green-800 border-b pb-1">ID Proofs</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {renderInput('Aadhaar Number', 'aadhaar')}
-            {renderInput('PAN Number', 'pan')}
-            {renderInput('Passport Number', 'passport')}
-            <div className="flex flex-col gap-1 w-full">
-              <label className="text-sm font-medium text-gray-700">Other ID Type</label>
-              <Select value={employeeData.otherId} onValueChange={value => handleChange('otherId', value)}>
-                <SelectTrigger className="rounded-xl border border-gray-300 shadow-sm">
-                  <SelectValue placeholder="Select Other ID Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="voter">Voter ID</SelectItem>
-                  <SelectItem value="driving">Driving License</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Submit Button */}
-      <div className="text-end max-w-5xl mx-auto mt-6 pb-10">
-        <Button
-          onClick={handleSubmit}
-          disabled={!isFormValid}
-          className={`rounded-full px-8 py-2 shadow-md transition ${
-            isFormValid
-              ? 'bg-gradient-to-r from-green-500 to-green-700 text-white hover:shadow-lg'
-              : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-          }`}
-        >
-          {formType === 'add' ? 'Add' : 'Update'}
-        </Button>
+          )}
+          <Button
+            onClick={handleSubmit}
+            disabled={!isFormValid}
+            className={`rounded-full px-8 py-2 shadow-md transition ${
+              isFormValid
+                ? 'bg-gradient-to-r from-green-500 to-green-700 text-white hover:bg-gradient-to-r hover:from-green-600 hover:to-green-800'
+                : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+            }`}
+          >
+            {formType === 'add' ? 'Add' : 'Update'}
+          </Button>
+        </div>
       </div>
     </div>
   );

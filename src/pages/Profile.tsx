@@ -22,11 +22,16 @@ interface ProfileData {
 }
 
 const CardSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
-  <div className="bg-white rounded-2xl shadow-sm border p-6 mb-6">
-    <h3 className="text-lg font-semibold text-green-700 mb-4 border-b border-gray-300 pb-1">{title}</h3>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{children}</div>
+  <div className="bg-white rounded-2xl shadow-sm border mb-6">
+    <div className="bg-green-100 px-6 py-3 rounded-t-2xl border-b border-green-200">
+      <h3 className="text-lg font-semibold text-green-800">{title}</h3>
+    </div>
+    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      {children}
+    </div>
   </div>
 );
+
 
 const Field = ({ label, value }: { label: string; value: string | number }) => (
   <div className="rounded-xl border p-4 bg-gray-50">
@@ -109,6 +114,7 @@ const Profile = () => {
 
     reader.readAsDataURL(file);
   };
+
 
   if (!profile) return <div className="p-6 text-center">Loading profile...</div>;
 

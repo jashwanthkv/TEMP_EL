@@ -33,15 +33,16 @@ import Ticket from "./pages/Ticket";
 import AdminLeaveManager from "./pages/AdminLeaveManager";
 import UploadPayslips from "./pages/UploadPayslips";
 import AdminAnalytics from "./pages/AdminAnalytics";
-import ManageHolidays from "./pages/ManageHolidays";
+
 import AdminSettings from "./pages/AdminSettings";
-import AdminCalendar from "./pages/AdminCalendar";
+import AdminCalendar from "./pages/AdminCompanyCalendar";
 import AdminTrainingCourses from "./pages/AdminTrainingCourses";
 import AdminPerformanceReview from "./pages/AdminPerformanceReview";
 import AdminNotifications from "./pages/AdminNotifications";
 import AdminCompanyAchievements from "./pages/AdminCompanyAchievements";
 import AdminTicket from "./pages/AdminTicket";
 import AdminManageNews from "./pages/AdminManageNews"; // ✅ ADDED
+import AdminTimesheet from "./pages/AdminTimesheet";
 
 const queryClient = new QueryClient();
 
@@ -73,7 +74,6 @@ const App = () => (
           <Route path="/admin/leaves" element={<AdminLeaveManager />} />
           <Route path="/admin/payslips" element={<UploadPayslips />} />
           <Route path="/admin/analytics" element={<AdminAnalytics />} />
-          <Route path="/admin/holidays" element={<ManageHolidays />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
           <Route path="/manage-employees" element={<ManageEmployees />} />
           <Route path="/admin/calendar" element={<AdminCalendar />} />
@@ -83,6 +83,9 @@ const App = () => (
           <Route path="/admin/company" element={<AdminCompanyAchievements />} />
           <Route path="/admin/ticket" element={<AdminTicket />} />
           <Route path="/admin/news" element={<AdminManageNews />} />
+          <Route path="/admin/timesheet" element={<AdminTimesheet/>}/>
+
+          
 
           {/* Fallback Route */}
           <Route path="*" element={<NotFound />} />

@@ -1,204 +1,149 @@
-import React, { useEffect, useState, useRef } from 'react';
+// Updated AdminProfile.tsx with profile layout and Google Drive image upload integration
+
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { ArrowLeft, Upload, Trash } from 'lucide-react';
+import { Bell, Home, Upload } from 'lucide-react';
 
+const BASE_PATH = 'https://script.google.com/macros/s/AKfycbw67WPhAKl8VzIzzlUoiWRTBNVg77lwwGNyiIX02BlR-Yk69XvKedFsslAcB6EOBgGTTg/exec';
 
-const BASE_PATH = '/script-api';
+interface AdminProfileData {
+  adminId: string;
+  adminName: string;
+  adminDesignation: string;
+  adminDepartment: string;
+  adminEmail: string;
+  adminJoinedOn: string;
+  adminEmploymentType: string;
+  adminStatus: string;
+  photoUrl?: string;
+}
 
-const AdminProfilePanel = () => {
+const CardSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div className="bg-white rounded-2xl shadow-sm border mb-6">
+    <div className="bg-green-100 px-6 py-3 rounded-t-2xl border-b border-green-200">
+      <h3 className="text-lg font-semibold text-green-800">{title}</h3>
+    </div>
+    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      {children}
+    </div>
+  </div>
+);
+
+const Field = ({ label, value }: { label: string; value: string | number }) => (
+  <div className="rounded-xl border p-4 bg-gray-50">
+    <p className="text-sm text-gray-500">{label}</p>
+    <p className="text-base font-medium text-gray-800">{value || '-'}</p>
+  </div>
+);
+
+const AdminProfile = () => {
   const navigate = useNavigate();
-  const [photoUrl, setPhotoUrl] = useState<string | null>(localStorage.getItem('adminProfilePhotoUrl') || null);
-  const [editMode, setEditMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [adminProfile, setAdminProfile] = useState<AdminProfileData | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(localStorage.getItem('adminProfilePhotoUrl') || null);
 
-  const [adminInfo, setAdminInfo] = useState({
-    adminName: localStorage.getItem('adminName') || 'Admin',
-    adminId: localStorage.getItem('adminId') || 'ADMIN001',
-    adminDesignation: localStorage.getItem('adminDesignation') || 'HR Manager',
-    adminDepartment: localStorage.getItem('adminDepartment') || 'Human Resources',
-    adminEmail: localStorage.getItem('adminEmail') || 'admin@codeblox.com',
-    adminJoinedOn: localStorage.getItem('adminJoinedOn') || '2024-01-01',
-  });
-
-  const avatarLetter = adminInfo.adminName.charAt(0).toUpperCase();
-
-  const handleUploadPhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      return alert('Please upload a valid image.');
-    }
-
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64 = reader.result?.toString().split(',')[1];
-      if (!base64) return;
-
-      try {
-        const res = await fetch(BASE_PATH, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'uploadAdminProfilePhoto',
-            adminId: adminInfo.adminId,
-            photoBlob: base64,
-          }),
-        });
-
-        const json = await res.json();
-        if (json.success) {
-          setPhotoUrl(json.photoUrl);
-          localStorage.setItem('adminProfilePhotoUrl', json.photoUrl);
-          alert('✅ Photo uploaded successfully!');
-        } else {
-          alert('❌ Upload failed.');
-        }
-      } catch (err) {
-        console.error(err);
-        alert('❌ Error during upload.');
-      }
+  useEffect(() => {
+    const profileData: AdminProfileData = {
+      adminId: localStorage.getItem('adminId') || 'ADMIN001',
+      adminName: localStorage.getItem('adminName') || 'Admin',
+      adminDesignation: localStorage.getItem('adminDesignation') || 'HR Manager',
+      adminDepartment: localStorage.getItem('adminDepartment') || 'Human Resources',
+      adminEmail: localStorage.getItem('adminEmail') || 'admin@codeblox.com',
+      adminJoinedOn: localStorage.getItem('adminJoinedOn') || '2024-01-01',
+      adminEmploymentType: localStorage.getItem('adminEmploymentType') || 'Full-Time',
+      adminStatus: localStorage.getItem('adminStatus') || 'Active',
+      photoUrl: localStorage.getItem('adminProfilePhotoUrl') || '',
     };
+    setAdminProfile(profileData);
+  }, []);
 
-    reader.readAsDataURL(file);
-  };
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const file = event.target.files?.[0];
+  if (!file || !adminProfile) return;
 
-  const handleRemovePhoto = async () => {
+  const reader = new FileReader();
+  reader.onload = async () => {
     try {
-      const res = await fetch(BASE_PATH, {
+      const base64Data = (reader.result as string).split(',')[1];
+      const response = await fetch(BASE_PATH, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'removeAdminProfilePhoto', adminId: adminInfo.adminId }),
+        body: JSON.stringify({
+          EMP_ID: adminProfile.adminId,
+          imageData: base64Data,
+          fileName: `${adminProfile.adminId}_photo.png`,
+          mimeType: file.type,
+        }),
       });
-      const json = await res.json();
-      if (json.success) {
-        setPhotoUrl(null);
-        localStorage.removeItem('adminProfilePhotoUrl');
-        alert('🗑 Profile photo removed');
+
+      const result = await response.json();
+      if (result.imageUrl) {
+        localStorage.setItem('adminProfilePhotoUrl', result.imageUrl);
+        setImageUrl(result.imageUrl);
       } else {
-        alert('❌ Failed to remove photo');
+        console.error('Upload failed:', result);
       }
     } catch (err) {
-      console.error(err);
-      alert('❌ Error removing photo.');
+      console.error('Image upload error:', err);
     }
   };
+  reader.readAsDataURL(file);
+};
 
-  const formatDate = (dateStr: string) => {
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      });
-    } catch {
-      return dateStr;
-    }
-  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <img src="/logos.png" alt="Logo" className="h-10 w-auto object-contain" />
-          <div>
-            <p className="text-lg font-bold text-green-700 leading-none">EPICAL LAYOUTS PVT LTD</p>
-            <p className="text-base font-semibold text-gray-600">Admin Panel</p>
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="flex justify-end items-center mb-6 gap-4">
+        <button onClick={() => navigate('/home')} className="text-green-600 hover:underline">
+          <Home className="inline-block mr-1" /> Home
+        </button>
+        <Bell />
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Left Side: Photo, Name, Email */}
+        <div className="w-full md:w-1/3 bg-white rounded-2xl shadow-sm border p-6 flex flex-col items-center">
+          <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-green-500 mb-4">
+            <img src={imageUrl || '/default-avatar.png'} alt="Admin" className="w-full h-full object-cover" />
           </div>
-        </div>
-
-        <div className="flex items-center space-x-6">
-          <span className="text-lg font-bold text-green-700">EMPWR</span>
-
-          <button className="relative text-green-700 hover:text-green-800">
-            <Bell className="h-6 w-6" />
+          <h2 className="text-xl font-bold mb-1">{adminProfile?.adminName}</h2>
+          <p className="text-sm text-gray-600 mb-4">{adminProfile?.adminEmail}</p>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm"
+          >
+            <Upload className="inline-block mr-2 h-4 w-4" /> Upload Photo
           </button>
-          <div className="relative group">
-            <button className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full">
-              <User className="w-5 h-5 text-green-700" />
-            </button>
-            <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg opacity-0 group-hover:opacity-100 group-hover:translate-y-1 transform transition-all duration-200 z-50">
-              <button
-                onClick={() => navigate('/profile')}
-                className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
-              >
-                <UserCircle className="w-4 h-4 text-green-600" />
-                View Profile
-              </button>
-            </div>
-          </div>
-
-          <button onClick={() => navigate('/admin')} className="text-green-700 hover:bg-green-100 p-2 rounded-full transition">
-            <Home className="h-5 w-5" />
-          </button>
-
-          
-        </div>
-      </header>
-
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="text-center mb-6">
-          <Avatar className="w-24 h-24 mx-auto mb-4 bg-green-100">
-            {photoUrl ? (
-              <AvatarImage src={photoUrl} alt="Admin" onError={() => setPhotoUrl(null)} />
-            ) : (
-              <AvatarFallback className="text-2xl font-bold text-green-700 bg-green-100">
-                {avatarLetter}
-              </AvatarFallback>
-            )}
-          </Avatar>
-
-          <div className="flex justify-center gap-4">
-            <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-1" /> Upload
-            </Button>
-            <Button variant="destructive" onClick={handleRemovePhoto}>
-              <Trash className="h-4 w-4 mr-1" /> Remove
-            </Button>
-            <input type="file" accept="image/*" hidden ref={fileInputRef} onChange={handleUploadPhoto} />
-          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handlePhotoUpload}
+            className="hidden"
+          />
         </div>
 
-        <Card className="mb-8 border-0 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold">Admin Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="text-sm font-medium text-gray-600">Name</label>
-                <p className="text-gray-900">{adminInfo.adminName}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Admin ID</label>
-                <p className="text-gray-900">{adminInfo.adminId}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Email</label>
-                <p className="text-gray-900">{adminInfo.adminEmail}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Department</label>
-                <p className="text-gray-900">{adminInfo.adminDepartment}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Designation</label>
-                <p className="text-gray-900">{adminInfo.adminDesignation}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-600">Joined On</label>
-                <p className="text-gray-900">{formatDate(adminInfo.adminJoinedOn)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Right Side: Info Cards */}
+        <div className="w-full md:w-2/3">
+          <CardSection title="Basic Information">
+            <Field label="Admin ID" value={adminProfile?.adminId || ''} />
+            <Field label="Name" value={adminProfile?.adminName || ''} />
+            <Field label="Designation" value={adminProfile?.adminDesignation || ''} />
+            <Field label="Department" value={adminProfile?.adminDepartment || ''} />
+            <Field label="Email" value={adminProfile?.adminEmail || ''} />
+          </CardSection>
+
+          <CardSection title="Joining Details">
+            <Field label="Joined On" value={adminProfile?.adminJoinedOn || ''} />
+            <Field label="Employment Type" value={adminProfile?.adminEmploymentType || ''} />
+            <Field label="Department" value={adminProfile?.adminDepartment || ''} />
+            <Field label="Designation" value={adminProfile?.adminDesignation || ''} />
+            <Field label="Status" value={adminProfile?.adminStatus || ''} />
+          </CardSection>
+        </div>
       </div>
     </div>
   );
 };
 
-export default AdminProfilePanel;
+export default AdminProfile;

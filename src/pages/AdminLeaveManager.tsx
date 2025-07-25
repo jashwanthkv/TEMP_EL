@@ -1,246 +1,231 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useNavigate } from 'react-router-dom';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import { sendRequest } from '../lib/api';
-import { Home, Bell, User, UserCircle } from 'lucide-react';
-
-interface LeaveRequest {
-  empId: string;
-  name: string;
-  email: string;
-  leaveType: string;
-  startDate: string;
-  endDate: string;
-  requestedDays: number;
-  reason: string;
-  status: string;
-}
-
-interface Holiday {
-  id: number;
-  date: string;
-  occasion: string;
-}
+import { Home, Bell, User, UserCircle, Pencil, Trash2 } from 'lucide-react';
 
 const AdminLeaveManager = () => {
   const navigate = useNavigate();
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
-  const [holidays, setHolidays] = useState<Holiday[]>([]);
+
+  const [leaveRequests, setLeaveRequests] = useState([
+    {
+      empId: 'EMP001',
+      name: 'John Doe',
+      department: 'Engineering',
+      leaveType: 'Sick Leave',
+      startDate: '2025-07-20',
+      endDate: '2025-07-22',
+      reason: 'Fever and cold',
+      status: 'Pending',
+      history: [
+        { type: 'Casual Leave', from: '2025-06-10', to: '2025-06-12', status: 'Approved' },
+        { type: 'Earned Leave', from: '2025-05-05', to: '2025-05-06', status: 'Rejected' },
+      ],
+    },
+  ]);
+
+  const [holidays, setHolidays] = useState([
+    { title: 'Independence Day', date: '2025-08-15', category: 'National' },
+    { title: 'Company Day', date: '2025-07-28', category: 'Company' },
+  ]);
+
+  const [holidayForm, setHolidayForm] = useState({
+    title: '',
+    fromDate: '',
+    toDate: '',
+    category: '',
+    editIndex: null,
+  });
+
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef(null);
 
   useEffect(() => {
-    fetchLeaveRequests();
-    fetchHolidays();
+    function handleClickOutside(event) {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchLeaveRequests = async () => {
-    const res = await sendRequest({ action: 'getLeaveRequests' });
-    if (res.success) {
-      setLeaveRequests(res.requests || []);
-    }
-  };
-
-  const fetchHolidays = async () => {
-    const res = await sendRequest({ action: 'getHolidays' });
-    if (res.success) {
-      setHolidays(res.holidays || []);
-    }
-  };
-
-  useEffect(() => {
-    leaveRequests.forEach(async (req) => {
-      if (
-        req.leaveType.toLowerCase() === 'emergency' &&
-        req.status.toLowerCase() === 'pending'
-      ) {
-        await sendRequest({
-          action: 'approveLeave',
-          email: req.email,
-          startDate: req.startDate,
-        });
-        fetchLeaveRequests();
-      }
-    });
-  }, [leaveRequests]);
-
-  const handleApprove = async (email: string, startDate: string) => {
-    const res = await sendRequest({ action: 'approveLeave', email, startDate });
-    if (res.success) {
-      alert('✅ Leave approved');
-      fetchLeaveRequests();
-    }
-  };
-
-  const handleReject = async (email: string, startDate: string) => {
-    const res = await sendRequest({ action: 'rejectLeave', email, startDate });
-    if (res.success) {
-      alert('❌ Leave rejected');
-      fetchLeaveRequests();
-    }
-  };
-
-  const handleAddHoliday = async () => {
-    const date = prompt('Enter holiday date (YYYY-MM-DD):');
-    const occasion = prompt('Enter occasion:');
-    if (date && occasion) {
-      const res = await sendRequest({ action: 'addHoliday', date, occasion });
-      if (res.success) {
-        alert('✅ Holiday added');
-        fetchHolidays();
-      }
-    }
-  };
-
-  const handleRemoveHoliday = async (date: string) => {
-    const res = await sendRequest({ action: 'removeHoliday', date });
-    if (res.success) {
-      alert('🗑️ Holiday removed');
-      fetchHolidays();
-    }
-  };
-
-  const tileClassName = ({ date, view }: { date: Date; view: string }) => {
+  const tileClassName = ({ date, view }) => {
     if (view === 'month') {
       const dateStr = date.toISOString().split('T')[0];
-      const holiday = holidays.find((h) => h.date === dateStr);
-      if (holiday) {
+      const isHoliday = holidays.some((h) => h.date === dateStr);
+      if (isHoliday) {
         return 'bg-red-500 text-white font-semibold rounded-full';
       }
     }
     return '';
   };
 
-  const filteredRequests = leaveRequests.filter(
-    (req) =>
-      req.status.toLowerCase() === 'pending' &&
-      req.leaveType.toLowerCase() !== 'emergency'
-  );
+  const handleAddOrUpdateHoliday = () => {
+    const { title, fromDate, category, editIndex } = holidayForm;
+    if (title && fromDate && category) {
+      const newHoliday = { title, date: fromDate, category };
+      if (editIndex !== null) {
+        const updated = [...holidays];
+        updated[editIndex] = newHoliday;
+        setHolidays(updated);
+      } else {
+        setHolidays((prev) => [...prev, newHoliday]);
+      }
+      setHolidayForm({ title: '', fromDate: '', toDate: '', category: '', editIndex: null });
+    }
+  };
+
+  const handleEditHoliday = (index) => {
+    const h = holidays[index];
+    setHolidayForm({ title: h.title, fromDate: h.date, toDate: h.date, category: h.category, editIndex: index });
+  };
+
+  const handleDeleteHoliday = (date) => {
+    setHolidays((prev) => prev.filter((h) => h.date !== date));
+  };
 
   return (
-    <div className="w-full p-0 m-0">
-      {/* Header */}
-      <header className="w-screen bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+    <div className="w-screen h-screen overflow-x-hidden overflow-y-auto bg-gray-50">
+      <header className="bg-white shadow-sm border-b border-gray-200 px-8 py-4 flex justify-between items-center w-full">
         <div className="flex items-center gap-3">
           <img src="/logos.png" alt="Logo" className="h-10 w-auto object-contain" />
           <div>
             <p className="text-lg font-bold text-green-700 leading-none">EPICAL LAYOUTS PVT LTD</p>
-            <p className="text-base font-semibold text-gray-600">Aprove Leaves</p>
+            <p className="text-base font-semibold text-gray-600">Manage Leaves</p>
           </div>
         </div>
 
         <div className="flex items-center space-x-6">
           <span className="text-lg font-bold text-green-700">EMPWR</span>
-
           <button className="relative text-green-700 hover:text-green-800">
             <Bell className="h-5 w-5" />
           </button>
-
-          <div className="relative group">
-            <button className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full">
+          <div className="relative" ref={profileRef}>
+            <button
+              onClick={() => setIsProfileOpen(prev => !prev)}
+              className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full"
+            >
               <User className="w-5 h-5 text-green-700" />
             </button>
-            <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg opacity-0 group-hover:opacity-100 group-hover:translate-y-1 transform transition-all duration-200 z-50">
-              <button
-                onClick={() => navigate('/profile')}
-                className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
-              >
-                <UserCircle className="w-4 h-4 text-green-600" />
-                View Profile
-              </button>
-            </div>
+            {isProfileOpen && (
+              <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg z-50">
+                <button
+                  onClick={() => {
+                    navigate('/admin/profile');
+                    setIsProfileOpen(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
+                >
+                  <UserCircle className="w-4 h-4 text-green-600" /> View Profile
+                </button>
+              </div>
+            )}
           </div>
-
           <button
-            onClick={() => navigate('/admin')}
             className="text-green-700 hover:bg-green-100 p-2 rounded-full transition"
+            onClick={() => navigate('/admin')}
           >
             <Home className="h-5 w-5" />
           </button>
         </div>
       </header>
 
-
-      {/* Leave Requests */}
-      <div className="px-16 py-4">
-        {filteredRequests.length === 0 ? (
-          <p className="text-gray-500 italic">No pending leave requests.</p>
-        ) : (
-          filteredRequests.map((req, index) => (
-            <Card key={`${req.email}-${index}`} className="shadow-sm border w-full min-h-[160px] mb-4">
-              <CardContent className="p-6 flex justify-between items-center">
-                <div>
-                  <p className="font-semibold text-lg">
-                    {req.name} ({req.empId})
-                  </p>
-                  <p className="text-base">
-                    Type: {req.leaveType} — {req.startDate} to {req.endDate}
-                  </p>
-                  <p>Requested Days: {req.requestedDays}</p>
-                  <p className="text-gray-700 italic">Reason: {req.reason}</p>
-                </div>
-                <div className="space-x-3">
-                  <Button
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={() => handleApprove(req.email, req.startDate)}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={() => handleReject(req.email, req.startDate)}
-                  >
-                    Reject
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* Holidays + Calendar */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 px-16 py-6">
-        {/* Holidays */}
+      <main className="p-6 space-y-6 w-full max-w-7xl mx-auto">
+        <div className="w-full max-h-[420px] overflow-y-auto rounded-xl shadow border bg-white p-6">
+          <h2 className="text-xl font-bold text-green-700 mb-4">Pending Leave Requests</h2>
+          {/* Inside the Leave Requests section */}
+{leaveRequests.map((req, idx) => (
+  <Card key={idx} className="mb-4 border shadow-sm bg-gray-100">
+    <CardContent className="p-4">
+      <p className="text-lg font-semibold text-black mb-2">
+        {req.name} ({req.empId}) - {req.department}
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-200 p-4 rounded-lg">
         <div>
-          <h2 className="text-2xl font-semibold mb-4">Public Holidays</h2>
-          <div className="grid gap-4">
-            {holidays.map((holiday) => (
-              <Card key={holiday.date} className="shadow-sm border">
-                <CardContent className="p-4 flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold">{holiday.occasion}</p>
-                    <p>{holiday.date}</p>
-                  </div>
-                  <Button
-                    variant="destructive"
-                    onClick={() => handleRemoveHoliday(holiday.date)}
-                  >
-                    Remove
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="mt-4">
-            <Button
-              className="bg-blue-600 text-white hover:bg-blue-700"
-              onClick={handleAddHoliday}
-            >
-              ➕ Add Holiday
-            </Button>
-          </div>
+          <p className="font-semibold text-gray-900 mb-1 text-sm">Leave Type</p>
+          <p className="text-base text-gray-800">{req.leaveType}</p>
+          <p className="text-sm text-gray-600 mt-1">From: {req.startDate} To: {req.endDate}</p>
         </div>
-
-        {/* Calendar */}
-        <div className="w-full flex justify-center items-start">
-          <div className="border rounded-2xl p-4 bg-white shadow-sm w-[340px]">
-            <h3 className="text-lg font-semibold mb-2 text-center">Holiday Calendar</h3>
-            <Calendar tileClassName={tileClassName} className="rounded-xl" />
-          </div>
+        <div>
+          <p className="font-semibold text-gray-900 mb-1 text-sm">Reason</p>
+          <p className="text-base text-gray-800">{req.reason}</p>
         </div>
       </div>
+      <div className="flex gap-3 mt-4">
+        <Button className="bg-green-600 text-white hover:bg-blue-700">Approve</Button>
+        <Button variant="destructive">Reject</Button>
+      </div>
+    </CardContent>
+  </Card>
+))}
+
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="p-6 border shadow-md">
+            <CardContent className="space-y-4">
+              <h2 className="text-lg font-bold text-green-700">Add / Edit Holiday</h2>
+              {/* Inside Add / Edit Holiday form */}
+<div className="flex flex-col gap-3">
+  <input
+    type="text"
+    placeholder="Title"
+    value={holidayForm.title}
+    onChange={(e) => setHolidayForm({ ...holidayForm, title: e.target.value })}
+    className="border p-2 rounded-md"
+  />
+  <input
+    type="date"
+    value={holidayForm.fromDate}
+    onChange={(e) => setHolidayForm({ ...holidayForm, fromDate: e.target.value })}
+    className="border p-2 rounded-md"
+  />
+  <Button
+    className="bg-green-600 text-white hover:bg-green-700"
+    onClick={handleAddOrUpdateHoliday}
+  >
+    {holidayForm.editIndex !== null ? 'Update Holiday' : 'Add Holiday'}
+  </Button>
+</div>
+
+              <div className="pt-4">
+                <h3 className="font-semibold text-gray-800 mb-2">Existing Holidays</h3>
+                {holidays.map((holiday, idx) => (
+                  <div key={idx} className="flex justify-between items-center border px-4 py-2 rounded-md mb-2">
+                    <div>
+                      <p className="font-medium text-base text-gray-800">{holiday.title}</p>
+                      <p className="text-sm text-gray-600">{holiday.date}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => handleEditHoliday(idx)}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleDeleteHoliday(holiday.date)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="p-6 border shadow-md">
+            <CardContent>
+              <h2 className="text-lg font-bold text-green-700 mb-4 text-center">This Month's Holidays</h2>
+              <Calendar tileClassName={tileClassName} className="rounded-xl w-full mb-4" />
+              <div className="text-sm text-gray-800 space-y-2">
+                {holidays.map((h, idx) => (
+                  <div key={idx}>{h.date}: {h.title} </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
     </div>
   );
 };
