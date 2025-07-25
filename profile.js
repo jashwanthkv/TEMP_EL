@@ -1,4 +1,4 @@
-const DRIVE_FOLDER_ID = "1YCkSUFaEDuAob9Ljf2rr4lGZwS6NvoeO";
+const DRIVE_FOLDER_ID = "1yVtUIDGgg-BaaaLR2hXm2J-gvLH6HtsX"; // Root folder
 
 function doGet(e) {
   try {
@@ -7,9 +7,13 @@ function doGet(e) {
     }
 
     const empId = e.parameter.EMP_ID;
+    const role = e.parameter.role;
     if (!empId) throw new Error("EMP_ID missing");
+    if (!role) throw new Error("role missing");
 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Employee");
+    // Use the provided Google Sheet ID for employee lookup
+    const SHEET_ID = "1WGvnJUF5n1ZoKHk5y8DzztYSuKhuNJBb-mquGwiRZ1w";
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Employee");
     const values = sheet.getDataRange().getValues();
     const headers = values.shift();
 
@@ -20,6 +24,28 @@ function doGet(e) {
 
     const profile = {};
     headers.forEach((h, i) => profile[h] = row[i]);
+
+    // Find the profile image fileId if it exists
+    try {
+      const root = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+      const roleFolder = root.getFoldersByName(role);
+      if (!roleFolder.hasNext()) throw new Error('Role folder not found');
+      const roleFld = roleFolder.next();
+      const idFolder = roleFld.getFoldersByName(String(empId));
+      if (!idFolder.hasNext()) throw new Error('ID folder not found');
+      const idFld = idFolder.next();
+      const profileImgFolder = idFld.getFoldersByName('ProfilePhoto');
+      if (profileImgFolder.hasNext()) {
+        const imgFld = profileImgFolder.next();
+        const files = imgFld.getFiles();
+        if (files.hasNext()) {
+          const file = files.next();
+          profile.IMAGE_URL = file.getId();
+        }
+      }
+    } catch (e) {
+      // Ignore if not found
+    }
 
     return ContentService
       .createTextOutput(JSON.stringify(profile))
@@ -35,19 +61,37 @@ function doGet(e) {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData.contents);
-    const { EMP_ID, imageData, fileName, mimeType } = body;
-    if (!EMP_ID || !imageData) throw new Error("Invalid payload");
+    const { EMP_ID, imageData, fileName, mimeType, role } = body;
+    if (!EMP_ID || !imageData || !role) throw new Error("Invalid payload");
 
     const blob = Utilities.newBlob(
       Utilities.base64Decode(imageData),
       mimeType,
       fileName
     );
-    const file = DriveApp.getFolderById(DRIVE_FOLDER_ID).createFile(blob);
+
+    // Navigate to correct folder: root -> role (Admin/Employees) -> EMP_ID -> ProfileImage
+    const root = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    let roleFldIter = root.getFoldersByName(role);
+    let roleFld = roleFldIter.hasNext() ? roleFldIter.next() : root.createFolder(role);
+    let idFldIter = roleFld.getFoldersByName(String(EMP_ID));
+    let idFld = idFldIter.hasNext() ? idFldIter.next() : roleFld.createFolder(String(EMP_ID));
+    let profileImgFldIter = idFld.getFoldersByName('ProfileImage');
+    let profileImgFld = profileImgFldIter.hasNext() ? profileImgFldIter.next() : idFld.createFolder('ProfileImage');
+
+    // Remove old files in ProfileImage folder
+    const files = profileImgFld.getFiles();
+    while (files.hasNext()) {
+      files.next().setTrashed(true);
+    }
+
+    const file = profileImgFld.createFile(blob);
     file.setName(`EMP_${EMP_ID}_${Date.now()}`);
     const fileId = file.getId();
 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Employee");
+    // Optionally update sheet IMAGE_URL
+    const SHEET_ID = "1WGvnJUF5n1ZoKHk5y8DzztYSuKhuNJBb-mquGwiRZ1w";
+    const sheet = SpreadsheetApp.openById(SHEET_ID).getSheetByName("Employee");
     const headers = sheet.getDataRange().getValues()[0];
     const col = headers.indexOf("IMAGE_URL") + 1;
     const rows = sheet.getDataRange().getValues();

@@ -21,8 +21,6 @@ import 'react-calendar/dist/Calendar.css';
 import { UserCircle } from 'lucide-react'; 
 import { Bell } from 'lucide-react';
 
-
-
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 type SidebarItem = {
@@ -46,19 +44,23 @@ const Dashboard = () => {
 
   // Optional: Close dropdown when clicking outside
   useEffect(() => {
-  const empId = localStorage.getItem('userId') || '4';
+  const empId = localStorage.getItem('userId');
+  const role = localStorage.getItem('role') || 'Employees';
+  if (!empId) return;
 
-  fetch(`${scriptUrl}?EMP_ID=${empId}`)
+  fetch(`${scriptUrl}?EMP_ID=${empId}&role=${role}`)
     .then(res => res.json())
     .then(data => {
       if (data.IMAGE_URL) {
         fetch(`${scriptUrl}?fileId=${data.IMAGE_URL}`)
           .then(res => res.text())
           .then(dataUri => setProfileImage(dataUri))
-          .catch(err => console.error('Failed to fetch profile image:', err));
+          .catch(() => setProfileImage(null));
+      } else {
+        setProfileImage(null);
       }
     })
-    .catch(err => console.error('Failed to fetch profile data:', err));
+    .catch(() => setProfileImage(null));
 }, []);
 
   const [newsData, setNewsData] = useState<NewsItem[]>([]);
@@ -243,7 +245,7 @@ useEffect(() => {
 }, []);
 
 
-const scriptUrl = 'https://script.google.com/macros/s/AKfycbzUnpG-dz3pXiQQlrG35eU2-k4kH95Rq9tRN_axyhqgRWNW0n3hfKtZtGD0JBRd7gyIxg/exec';
+const scriptUrl = 'https://script.google.com/macros/s/AKfycbz0b9c2rTYUGRSyVbbsXVcnenIFOIbsuQY2JrvP_Ar65QW1fIJcv61Y39aXA-VOing0dg/exec';
 const [profileImage, setProfileImage] = useState<string | null>(null);
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -577,4 +579,3 @@ const [profileImage, setProfileImage] = useState<string | null>(null);
   );
 };
 export default Dashboard;
-

@@ -92,7 +92,7 @@ type EmployeeData = {
   pan: string;
   passport: string;
   otherId: string;
-  status?: string; // Added status field
+  status?: string;
 };
 
 const initialData: EmployeeData = {
@@ -132,6 +132,8 @@ const ManageEmployees = () => {
   const [formType, setFormType] = useState<FormType>('add');
   const [employeeData, setEmployeeData] = useState<EmployeeData>({ ...initialData });
   const [updateId, setUpdateId] = useState('');
+  const [employeeList, setEmployeeList] = useState<{id: string, name: string}[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
@@ -146,12 +148,36 @@ const ManageEmployees = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    if (formType === 'update') {
+      fetchEmployeeList();
+    }
+  }, [formType]);
+
+  const fetchEmployeeList = async () => {
+    setLoadingEmployees(true);
+    try {
+      const url = EMPLOYEE_API_URL + `?action=getEmployeeList`;
+      const data = await jsonpRequest(url);
+      if (data.status === "success") {
+        setEmployeeList(data.employees.map((emp: any) => ({
+          id: emp.empId,
+          name: `${emp.FirstName} ${emp.lastName}`
+        })));
+      } else {
+        alert("Failed to fetch employee list");
+      }
+    } catch (err) {
+      alert("Error fetching employee list");
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
   const handleChange = (field: keyof EmployeeData, value: string) => {
     setEmployeeData(prev => ({ ...prev, [field]: value }));
   };
-  
 
-  // Fetch employee details from backend (JSONP)
   const handleFetch = async () => {
     if (!updateId) return;
     
@@ -176,18 +202,18 @@ const ManageEmployees = () => {
           uanNumber: data.employee.UAN || '',
           pfEsiStatus: data.employee.PF_ESI_Status || '',
           joiningDate: data.employee.JoiningDate || '',
-          employmentType: '', // Not in backend
+          employmentType: '',
           designation: data.employee.designation || '',
           department: data.employee.department || '',
           reportingManager: data.employee.manager || '',
           role: data.employee.role || 'employee',
           employeeId: data.employee.empId || '',
-          ctc: '', // Not in backend
+          ctc: '',
           aadhaar: data.employee.AadhaarCard || '',
           pan: data.employee.PANCard || '',
-          passport: '', // Not in backend
-          otherId: '', // Not in backend
-          status: data.employee.status || 'inactive', // Added status
+          passport: '',
+          otherId: '',
+          status: data.employee.status || 'inactive',
         };
         
         setEmployeeData(fetchedData);
@@ -199,7 +225,6 @@ const ManageEmployees = () => {
     }
   };
 
-  // Add or update employee (JSONP)
   const handleSubmit = async () => {
     if (formType === 'add') {
       const params = { action: "addEmployee", ...mapToBackendParams(employeeData) };
@@ -219,11 +244,11 @@ const ManageEmployees = () => {
         position: employeeData.designation,
         dept: employeeData.department,
         email: employeeData.companyEmail,
-        password: "123456", // Or from form
+        password: "123456",
         phone: employeeData.mobile,
         joined: employeeData.joiningDate,
         role: employeeData.role,
-        state: employeeData.status || "inactive", // Added status
+        state: employeeData.status || "inactive",
         gender: employeeData.gender,
         dob: employeeData.dob,
         pEmail: employeeData.personalEmail,
@@ -248,7 +273,6 @@ const ManageEmployees = () => {
     }
   };
 
-  // Handle activate/deactivate employee
   const handleStatusChange = async (newStatus: string) => {
     if (!updateId) return;
     
@@ -262,7 +286,6 @@ const ManageEmployees = () => {
     try {
       const data = await jsonpRequest(url);
       alert(data.message);
-      // Refresh the employee data
       await handleFetch();
     } catch (err) {
       alert("Failed to change employee status.");
@@ -290,7 +313,6 @@ const ManageEmployees = () => {
 
   return (
     <div className="bg-gray-50 min-h-screen overflow-x-hidden">
-      {/* Full-width Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 px-8 py-4 flex justify-between items-center w-full">
         <div className="flex items-center gap-3">
           <img src="/logos.png" alt="Logo" className="h-10 w-auto object-contain" />
@@ -336,7 +358,6 @@ const ManageEmployees = () => {
       </header>
 
       <div className="container mx-auto px-4">
-        {/* Toggle Buttons */}
         <div className="flex gap-6 justify-center mt-6">
           <Button
             className={`rounded-full px-10 py-2 shadow-md hover:shadow-lg transition ${
@@ -366,38 +387,50 @@ const ManageEmployees = () => {
           </Button>
         </div>
 
-        {/* ID Input Section - Only for update */}
         {formType === 'update' && (
           <Card className="rounded-2xl shadow-lg bg-white max-w-5xl mx-auto mt-6">
             <CardContent className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                 <div className="flex flex-col gap-1 w-full">
                   <label className="text-sm font-medium text-gray-700">
-                    Employee ID to Update
+                    Select Employee
                   </label>
-                  <Input
-                    className="rounded-xl border-gray-300"
+                  <Select
                     value={updateId}
-                    onChange={e => setUpdateId(e.target.value)}
-                  />
+                    onValueChange={(value) => {
+                      setUpdateId(value);
+                      if (value) handleFetch();
+                    }}
+                    disabled={loadingEmployees}
+                  >
+                    <SelectTrigger className="rounded-xl border-gray-300">
+                      <SelectValue placeholder={loadingEmployees ? "Loading employees..." : "Select employee"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {employeeList.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id}>
+                          {`${emp.id}-${emp.name}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button
                   onClick={handleFetch}
-                  disabled={!updateId.trim()}
+                  disabled={!updateId || loadingEmployees}
                   className={`text-white px-4 py-2 rounded-full shadow transition self-end ${
-                    updateId.trim()
+                    updateId && !loadingEmployees
                       ? 'bg-green-600 hover:bg-green-700'
                       : 'bg-gray-300 cursor-not-allowed'
                   }`}
                 >
-                  Fetch
+                  {loadingEmployees ? 'Loading...' : 'Fetch'}
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Form Content */}
         <Card className="rounded-2xl shadow-lg bg-white max-w-5xl mx-auto mt-6">
           <CardContent className="p-6 space-y-6">
             <h3 className="text-lg font-semibold text-green-800 border-b pb-1">Basic Details</h3>
@@ -474,45 +507,47 @@ const ManageEmployees = () => {
           </CardContent>
         </Card>
 
-        {/* Submit Button - Only show for add/update */}
-        <div className="text-end max-w-5xl mx-auto mt-6 pb-10">
-          {formType === 'update' && employeeData.status && (
-            <div className="flex justify-start gap-4 mb-4">
-              <Button
-                onClick={() => handleStatusChange('active')}
-                disabled={employeeData.status === 'active'}
-                className={`rounded-full px-6 py-2 shadow-md transition ${
-                  employeeData.status !== 'active'
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                }`}
-              >
-                Activate
-              </Button>
-              <Button
-                onClick={() => handleStatusChange('inactive')}
-                disabled={employeeData.status === 'inactive'}
-                className={`rounded-full px-6 py-2 shadow-md transition ${
-                  employeeData.status !== 'inactive'
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                }`}
-              >
-                Deactivate
-              </Button>
-            </div>
-          )}
-          <Button
-            onClick={handleSubmit}
-            disabled={!isFormValid}
-            className={`rounded-full px-8 py-2 shadow-md transition ${
-              isFormValid
-                ? 'bg-gradient-to-r from-green-500 to-green-700 text-white hover:bg-gradient-to-r hover:from-green-600 hover:to-green-800'
-                : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-            }`}
-          >
-            {formType === 'add' ? 'Add' : 'Update'}
-          </Button>
+        <div className="max-w-5xl mx-auto mt-6 pb-10">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            {formType === 'update' && employeeData.status && (
+              <div className="flex gap-4 order-2 md:order-1">
+                <Button
+                  onClick={() => handleStatusChange('active')}
+                  disabled={employeeData.status === 'active'}
+                  className={`rounded-full px-6 py-2 shadow-md transition ${
+                    employeeData.status !== 'active'
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                  }`}
+                >
+                  Activate
+                </Button>
+                <Button
+                  onClick={() => handleStatusChange('inactive')}
+                  disabled={employeeData.status === 'inactive'}
+                  className={`rounded-full px-6 py-2 shadow-md transition ${
+                    employeeData.status !== 'inactive'
+                      ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-300 hover:shadow-red-400'
+                      : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                  }`}
+                >
+                  Deactivate
+                </Button>
+              </div>
+            )}
+            
+            <Button
+              onClick={handleSubmit}
+              disabled={!isFormValid}
+              className={`rounded-full px-8 py-2 shadow-md transition order-1 md:order-2 ${
+                isFormValid
+                  ? 'bg-gradient-to-r from-green-500 to-green-700 text-white hover:bg-gradient-to-r hover:from-green-600 hover:to-green-800'
+                  : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+              }`}
+            >
+              {formType === 'add' ? 'Add Employee' : 'Update Employee'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

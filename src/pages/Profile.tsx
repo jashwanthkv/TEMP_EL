@@ -40,7 +40,7 @@ const Field = ({ label, value }: { label: string; value: string | number }) => (
   </div>
 );
 
-const scriptUrl = 'https://script.google.com/macros/s/AKfycbzUnpG-dz3pXiQQlrG35eU2-k4kH95Rq9tRN_axyhqgRWNW0n3hfKtZtGD0JBRd7gyIxg/exec';
+const scriptUrl = 'https://script.google.com/macros/s/AKfycbz0b9c2rTYUGRSyVbbsXVcnenIFOIbsuQY2JrvP_Ar65QW1fIJcv61Y39aXA-VOing0dg/exec';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -49,7 +49,9 @@ const Profile = () => {
 
   useEffect(() => {
     const empId = Number(localStorage.getItem('userId') || '4');
-    fetch(`${scriptUrl}?EMP_ID=${empId}`)
+    const userRole = localStorage.getItem('userRole');
+    const role = userRole === 'admin' ? 'Admin' : 'Employees';
+    fetch(`${scriptUrl}?EMP_ID=${empId}&role=${role}`)
       .then(res => res.json())
       .then(data => {
         if (data.EMP_ID) {
@@ -81,6 +83,9 @@ const Profile = () => {
     const file = e.target.files?.[0];
     if (!file || !profile) return;
 
+    const userRole = localStorage.getItem('userRole');
+    const role = userRole === 'admin' ? 'Admin' : 'Employees';
+
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64Data = (reader.result as string).split(',')[1];
@@ -89,6 +94,7 @@ const Profile = () => {
         imageData: base64Data,
         fileName: file.name,
         mimeType: file.type,
+        role: role,
       };
 
       try {

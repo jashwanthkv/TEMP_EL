@@ -4,6 +4,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Home, User, UserCircle } from 'lucide-react';
+import AdminTimesheet from './AdminTimesheet'; // Assuming the timesheet is extracted to its own component
+
 
 // Type definition
 type TicketType = {
