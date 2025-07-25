@@ -43,6 +43,10 @@ import AdminCompanyAchievements from "./pages/AdminCompanyAchievements";
 import AdminTicket from "./pages/AdminTicket";
 import AdminManageNews from "./pages/AdminManageNews"; // ✅ ADDED
 import AdminTimesheet from "./pages/AdminTimesheet";
+import AdminProject from './pages/AdminProject'; 
+// In main index.tsx or App.tsx
+
+
 
 const queryClient = new QueryClient();
 
@@ -84,6 +88,7 @@ const App = () => (
           <Route path="/admin/ticket" element={<AdminTicket />} />
           <Route path="/admin/news" element={<AdminManageNews />} />
           <Route path="/admin/timesheet" element={<AdminTimesheet/>}/>
+          <Route path="/admin/project" element={<AdminProject />} />
 
           
 

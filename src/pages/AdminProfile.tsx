@@ -1,12 +1,12 @@
-// Updated AdminProfile.tsx with profile layout and Google Drive image upload integration
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Home, Upload } from 'lucide-react';
+import { Home, Upload } from 'lucide-react';
+import NotificationBell from '@/components/ui/NotificationBell';
 
-const BASE_PATH = 'https://script.google.com/macros/s/AKfycbw67WPhAKl8VzIzzlUoiWRTBNVg77lwwGNyiIX02BlR-Yk69XvKedFsslAcB6EOBgGTTg/exec';
+const BASE_PATH = 'https://script.google.com/macros/s/AKfycbz0b9c2rTYUGRSyVbbsXVcnenIFOIbsuQY2JrvP_Ar65QW1fIJcv61Y39aXA-VOing0dg/exec';
 
 interface AdminProfileData {
+  empId: any;
   adminId: string;
   adminName: string;
   adminDesignation: string;
@@ -15,6 +15,10 @@ interface AdminProfileData {
   adminJoinedOn: string;
   adminEmploymentType: string;
   adminStatus: string;
+  phone?: string;
+  dob?: string;
+  gender?: string;
+  address?: string;
   photoUrl?: string;
 }
 
@@ -38,112 +42,177 @@ const Field = ({ label, value }: { label: string; value: string | number }) => (
 
 const AdminProfile = () => {
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [adminProfile, setAdminProfile] = useState<AdminProfileData | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(localStorage.getItem('adminProfilePhotoUrl') || null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
 
   useEffect(() => {
-    const profileData: AdminProfileData = {
-      adminId: localStorage.getItem('adminId') || 'ADMIN001',
-      adminName: localStorage.getItem('adminName') || 'Admin',
-      adminDesignation: localStorage.getItem('adminDesignation') || 'HR Manager',
-      adminDepartment: localStorage.getItem('adminDepartment') || 'Human Resources',
-      adminEmail: localStorage.getItem('adminEmail') || 'admin@codeblox.com',
-      adminJoinedOn: localStorage.getItem('adminJoinedOn') || '2024-01-01',
-      adminEmploymentType: localStorage.getItem('adminEmploymentType') || 'Full-Time',
-      adminStatus: localStorage.getItem('adminStatus') || 'Active',
-      photoUrl: localStorage.getItem('adminProfilePhotoUrl') || '',
-    };
-    setAdminProfile(profileData);
+    // Use userId and userRole for admin, fallback to EMP_ID for employees
+    const empId = localStorage.getItem('userId') || localStorage.getItem('EMP_ID');
+    const userRole = localStorage.getItem('userRole');
+    const role = userRole === 'admin' ? 'Admin' : 'Employees';
+    console.log('EMP_ID:', empId, 'userRole:', userRole, 'role:', role);
+    if (!empId) return;
+    fetch(`${BASE_PATH}?EMP_ID=${empId}&role=${role}`)
+      .then(res => res.json())
+      .then(async data => {
+        console.log('Profile fetch response:', data);
+        // Map backend fields to admin fields
+        if (data.EMP_ID || data.adminId || data.adminName) {
+          setAdminProfile({
+            empId: data.EMP_ID || empId,
+            adminId: data.adminId || data.EMP_ID || localStorage.getItem('userId') || 'ADMIN001',
+            adminName: data.adminName || data.EMP_NAME || localStorage.getItem('userName') || 'Admin',
+            adminDesignation: data.adminDesignation || data.POSITION || localStorage.getItem('userDesignation') || 'HR Manager',
+            adminDepartment: data.adminDepartment || data.DEPT || localStorage.getItem('userDepartment') || 'Human Resources',
+            adminEmail: data.adminEmail || data.EMAIL || localStorage.getItem('userEmail') || 'admin@codeblox.com',
+            adminJoinedOn: data.adminJoinedOn || data.JOINED || localStorage.getItem('userJoinedOn') || '2024-01-01',
+            adminEmploymentType: data.adminEmploymentType || data.ROLE || 'Full-Time',
+            adminStatus: data.adminStatus || data.STATE || localStorage.getItem('userStatus') || 'Active',
+            phone: data.phone || data.PHONE || '',
+            dob: data.dob || data.DOB || '',
+            gender: data.gender || data.GENDER || '',
+            address: data.address || data.ADDRESS || '',
+            photoUrl: '',
+          });
+          if (data.IMAGE_URL) {
+            // Always fetch the data URI for the image
+            try {
+              const imgRes = await fetch(`${BASE_PATH}?fileId=${data.IMAGE_URL}`);
+              const dataUri = await imgRes.text();
+              setImageUrl(dataUri);
+            } catch (err) {
+              setImageUrl(null);
+            }
+          } else {
+            setImageUrl(null);
+          }
+        } else {
+          alert('Admin profile not found.');
+        }
+      })
+      .catch(err => {
+        console.error('Fetch error:', err);
+        alert('Failed to fetch admin profile.');
+      });
   }, []);
 
-  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-  const file = event.target.files?.[0];
-  if (!file || !adminProfile) return;
 
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !adminProfile) return;
+
+    const userRole = localStorage.getItem('userRole');
+    const role = userRole === 'admin' ? 'Admin' : 'Employees';
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
       const base64Data = (reader.result as string).split(',')[1];
-      const response = await fetch(BASE_PATH, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          EMP_ID: adminProfile.adminId,
-          imageData: base64Data,
-          fileName: `${adminProfile.adminId}_photo.png`,
-          mimeType: file.type,
-        }),
-      });
+      const payload = {
+        EMP_ID: adminProfile.empId.toString(),
+        imageData: base64Data,
+        fileName: file.name,
+        mimeType: file.type,
+        role: role,
+      };
 
-      const result = await response.json();
-      if (result.imageUrl) {
-        localStorage.setItem('adminProfilePhotoUrl', result.imageUrl);
-        setImageUrl(result.imageUrl);
-      } else {
-        console.error('Upload failed:', result);
+      try {
+        const res = await fetch(BASE_PATH, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await res.json();
+        if (result.fileId) {
+          // Fetch the new image as data URI
+          try {
+            const imgRes = await fetch(`${BASE_PATH}?fileId=${result.fileId}`);
+            const dataUri = await imgRes.text();
+            setImageUrl(dataUri);
+          } catch (err) {
+            setImageUrl(null);
+          }
+          alert('Image uploaded successfully');
+        } else {
+          alert('Image upload failed');
+        }
+      } catch (error) {
+        console.error('Upload error:', error);
+        alert('Upload failed');
       }
-    } catch (err) {
-      console.error('Image upload error:', err);
-    }
+    };
+    reader.readAsDataURL(file);
   };
-  reader.readAsDataURL(file);
-};
 
+  if (!adminProfile) return <div className="p-6 text-center">Loading admin profile...</div>;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex justify-end items-center mb-6 gap-4">
-        <button onClick={() => navigate('/home')} className="text-green-600 hover:underline">
-          <Home className="inline-block mr-1" /> Home
-        </button>
-        <Bell />
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-6">
-        {/* Left Side: Photo, Name, Email */}
-        <div className="w-full md:w-1/3 bg-white rounded-2xl shadow-sm border p-6 flex flex-col items-center">
-          <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-green-500 mb-4">
-            <img src={imageUrl || '/default-avatar.png'} alt="Admin" className="w-full h-full object-cover" />
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
+      <header className="bg-white shadow-sm border-b px-6 py-4 fixed top-0 w-full z-10 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <img src="/logos.png" alt="Logo" className="h-10 object-contain" />
+          <div>
+            <p className="text-lg font-bold text-green-800">EPICAL LAYOUTS PVT LTD</p>
+            <p className="text-base text-gray-600">Admin Profile</p>
           </div>
-          <h2 className="text-xl font-bold mb-1">{adminProfile?.adminName}</h2>
-          <p className="text-sm text-gray-600 mb-4">{adminProfile?.adminEmail}</p>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm"
-          >
-            <Upload className="inline-block mr-2 h-4 w-4" /> Upload Photo
+        </div>
+        <div className="flex items-center space-x-6">
+          <span className="text-lg font-bold text-green-800">EMPWR</span>
+          <NotificationBell />
+          <button onClick={() => navigate('/admin')} className="text-green-800 hover:bg-green-100 p-2 rounded-full">
+            <Home className="h-5 w-5" />
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoUpload}
-            className="hidden"
-          />
         </div>
+      </header>
 
-        {/* Right Side: Info Cards */}
-        <div className="w-full md:w-2/3">
-          <CardSection title="Basic Information">
-            <Field label="Admin ID" value={adminProfile?.adminId || ''} />
-            <Field label="Name" value={adminProfile?.adminName || ''} />
-            <Field label="Designation" value={adminProfile?.adminDesignation || ''} />
-            <Field label="Department" value={adminProfile?.adminDepartment || ''} />
-            <Field label="Email" value={adminProfile?.adminEmail || ''} />
-          </CardSection>
+      <aside className="w-full md:w-1/4 bg-white p-4 border-r pt-24">
+        <div className="text-center">
+          <div className="w-32 h-32 mx-auto mb-4 rounded-full bg-green-100 overflow-hidden">
+            {imageUrl ? (
+              <img src={imageUrl} alt="Admin" className="w-full h-full object-cover rounded-full" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-green-600 text-6xl font-bold bg-green-50">A</div>
+            )}
+          </div>
+          <h2 className="text-xl font-semibold">{adminProfile.adminName}</h2>
+          <p className="text-sm text-gray-500">{adminProfile.adminDesignation}</p>
 
-          <CardSection title="Joining Details">
-            <Field label="Joined On" value={adminProfile?.adminJoinedOn || ''} />
-            <Field label="Employment Type" value={adminProfile?.adminEmploymentType || ''} />
-            <Field label="Department" value={adminProfile?.adminDepartment || ''} />
-            <Field label="Designation" value={adminProfile?.adminDesignation || ''} />
-            <Field label="Status" value={adminProfile?.adminStatus || ''} />
-          </CardSection>
+          <label className="mt-6 text-green-600 hover:underline text-sm flex items-center justify-center gap-1 cursor-pointer">
+            <Upload size={14} /> Upload New Photo
+            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+          </label>
         </div>
-      </div>
+      </aside>
+
+      <main className="w-full md:w-3/4 p-6 pt-28 overflow-y-auto">
+        <CardSection title="Basic Information">
+          <Field label="Admin ID" value={adminProfile.adminId} />
+          <Field label="Name" value={adminProfile.adminName} />
+          <Field label="Designation" value={adminProfile.adminDesignation} />
+          <Field label="Department" value={adminProfile.adminDepartment} />
+          <Field label="Email" value={adminProfile.adminEmail} />
+        </CardSection>
+
+        <CardSection title="Joining Details">
+          <Field label="Joined On" value={adminProfile.adminJoinedOn.split('T')[0]} />
+          <Field label="Employment Type" value={adminProfile.adminEmploymentType} />
+          <Field label="Status" value={adminProfile.adminStatus} />
+        </CardSection>
+
+
+        <CardSection title="Personal Information">
+          <Field label="Phone" value={adminProfile.phone || ''} />
+          <Field label="Date of Birth" value={adminProfile.dob.split('T')[0] || ''} />
+          <Field label="Gender" value={adminProfile.gender || ''} />
+          <Field label="Address" value={adminProfile.address || ''} />
+        </CardSection>
+      </main>
     </div>
   );
-};
+}
+
 
 export default AdminProfile;
+

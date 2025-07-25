@@ -34,7 +34,7 @@ function doGet(e) {
       const idFolder = roleFld.getFoldersByName(String(empId));
       if (!idFolder.hasNext()) throw new Error('ID folder not found');
       const idFld = idFolder.next();
-      const profileImgFolder = idFld.getFoldersByName('ProfilePhoto');
+      const profileImgFolder = idFld.getFoldersByName('ProfileImage');
       if (profileImgFolder.hasNext()) {
         const imgFld = profileImgFolder.next();
         const files = imgFld.getFiles();
@@ -128,4 +128,15 @@ function doGetImage(e) {
       .createTextOutput(err.message)
       .setMimeType(ContentService.MimeType.TEXT);
   }
+}
+function testDoGetProfile() {
+  const mockEvent = {
+    parameter: {
+      EMP_ID: "4",   // Replace with a real EMP_ID from your sheet
+      role: "Employees"   // Replace with your actual folder role
+    }
+  };
+
+  const response = doGet(mockEvent);
+  Logger.log(response.getContent()); // View response in Apps Script logs
 }

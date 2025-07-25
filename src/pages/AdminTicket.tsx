@@ -17,6 +17,7 @@ type TicketType = {
   Timestamp: string;
   AssignedTo?: string;
   Comments?: string;
+  EmployeeID?: string; // NEW FIELD
 };
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxJ460fW7M-OyARIkITeyjG90BVh5V1sVzStndHW2posqFx8M6UjUBGmJKp4wg3ZtU1/exec';
@@ -310,114 +311,124 @@ const TicketManagement = () => {
           )}
 
           {/* Ticket List */}
-          <div className="w-full bg-white rounded-xl shadow overflow-x-auto">
-            <table className="min-w-full text-sm text-gray-700">
-              <thead className="bg-blue-100 text-gray-800 font-semibold">
-                <tr>
-                  <th className="p-4 text-left">ID</th>
-                  <th className="p-4 text-left">Title</th>
-                  <th className="p-4 text-left">Priority</th>
-                  {userRole === 'admin' && <th className="p-4 text-left">Assigned To</th>}
-                  <th className="p-4 text-left">Status</th>
-                  <th className="p-4 text-left">Timestamp</th>
-                  {userRole === 'admin' && <th className="p-4 text-left">Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td className="p-4 text-center" colSpan={userRole === 'admin' ? 7 : 6}>
-                      Loading...
-                    </td>
-                  </tr>
-                ) : tickets.length === 0 ? (
-                  <tr>
-                    <td className="p-4 text-center" colSpan={userRole === 'admin' ? 7 : 6}>
-                      No tickets found.
-                    </td>
-                  </tr>
-                ) : (
-                  tickets.map((ticket, i) => (
-                    <tr key={i} className="border-t hover:bg-gray-50">
-                      <td className="p-4 font-semibold text-blue-600">{ticket.ID || '-'}</td>
-                      <td className="p-4">{ticket.Title || '-'}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          ticket.Priority === 'High' ? 'bg-red-100 text-red-800' :
-                          ticket.Priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {ticket.Priority || '-'}
-                        </span>
-                      </td>
-                      {userRole === 'admin' && (
-                        <td className="p-4">
-                          <Input 
-                            value={ticket.AssignedTo || ''} 
-                            onChange={(e) => {
-                              const updatedTickets = [...tickets];
-                              updatedTickets[i].AssignedTo = e.target.value;
-                              setTickets(updatedTickets);
-                            }}
-                            className="w-32"
-                          />
-                        </td>
-                      )}
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(ticket.Status)}`}>
-                          {ticket.Status || '-'}
-                        </span>
-                      </td>
-                      <td className="p-4">{ticket.Timestamp || '-'}</td>
-                      {userRole === 'admin' && (
-                        <td className="p-4 flex gap-2">
-                          {ticket.Status === 'Pending' && (
-                            <>
-                              <Button
-                                onClick={() => handleStatusUpdate(ticket.ID, 'Approved')}
-                                className="bg-blue-600 text-white hover:bg-blue-700 text-xs px-3 py-1"
-                                size="sm"
-                              >
-                                Approve
-                              </Button>
-                              <Button
-                                onClick={() => handleStatusUpdate(ticket.ID, 'Rejected')}
-                                className="bg-red-600 text-white hover:bg-red-700 text-xs px-3 py-1"
-                                size="sm"
-                              >
-                                Reject
-                              </Button>
-                            </>
-                          )}
-                          {ticket.Status === 'Approved' && (
-                            <Button
-                              onClick={() => handleStatusUpdate(ticket.ID, 'Completed')}
-                              className="bg-green-600 text-white hover:bg-green-700 text-xs px-3 py-1"
-                              size="sm"
-                            >
-                              Mark Complete
-                            </Button>
-                          )}
-                          <Button
-                            onClick={() => {
-                              const comments = prompt('Enter comments:', ticket.Comments || '');
-                              if (comments !== null) {
-                                handleStatusUpdate(ticket.ID, ticket.Status, comments);
-                              }
-                            }}
-                            className="bg-gray-600 text-white hover:bg-gray-700 text-xs px-3 py-1"
-                            size="sm"
-                          >
-                            Comment
-                          </Button>
-                        </td>
-                      )}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          {/* 1️⃣ Pending Tickets Table (No Status Column) */}
+          {/* 1️⃣ Pending Tickets Table */}
+<h3 className="text-lg font-bold text-gray-700 mt-10">Pending Tickets</h3>
+<div className="bg-white rounded-xl shadow overflow-x-auto">
+  <table className="min-w-full text-sm text-gray-700">
+    <thead className="bg-blue-100 text-gray-800 font-semibold">
+      <tr>
+        <th className="p-4 text-left">Employee ID</th>
+        <th className="p-4 text-left">ID</th>
+        <th className="p-4 text-left">Title</th>
+        <th className="p-4 text-left">Priority</th>
+        <th className="p-4 text-left">Timestamp</th>
+        <th className="p-4 text-left">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {tickets.filter(t => t.Status === 'Pending').map((ticket, i) => (
+        <tr key={i} className="border-t hover:bg-gray-50">
+          <td className="p-4">{ticket.EmployeeID || 'EMP-001'}</td>
+          <td className="p-4 font-semibold">{ticket.ID}</td>
+          <td className="p-4">{ticket.Title}</td>
+          <td className="p-4">{ticket.Priority}</td>
+          <td className="p-4">{ticket.Timestamp}</td>
+          <td className="p-4 flex gap-2">
+            <Button
+              onClick={() => handleStatusUpdate(ticket.ID, 'Approved')}
+              className="bg-blue-600 text-white text-xs px-3 py-1"
+            >
+              Approve
+            </Button>
+            <Button
+              onClick={() => handleStatusUpdate(ticket.ID, 'Rejected')}
+              className="bg-red-600 text-white text-xs px-3 py-1"
+            >
+              Reject
+            </Button>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+{/* 2️⃣ Approved Requests Table */}
+<h3 className="text-lg font-bold text-gray-700 mt-10">Approved Requests</h3>
+<div className="bg-white rounded-xl shadow overflow-x-auto">
+  <table className="min-w-full text-sm text-gray-700">
+    <thead className="bg-green-100 text-gray-800 font-semibold">
+      <tr>
+        <th className="p-4 text-left">Employee ID</th>
+        <th className="p-4 text-left">ID</th>
+        <th className="p-4 text-left">Title</th>
+        <th className="p-4 text-left">Priority</th>
+        <th className="p-4 text-left">Timestamp</th>
+        <th className="p-4 text-left">Status</th>
+        <th className="p-4 text-left">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {tickets.filter(t => t.Status === 'Approved').map((ticket, i) => (
+        <tr key={i} className="border-t hover:bg-gray-50">
+          <td className="p-4">{ticket.EmployeeID || 'EMP-001'}</td>
+          <td className="p-4 font-semibold">{ticket.ID}</td>
+          <td className="p-4">{ticket.Title}</td>
+          <td className="p-4">{ticket.Priority}</td>
+          <td className="p-4">{ticket.Timestamp}</td>
+          <td className="p-4">
+            <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">Approved</span>
+          </td>
+          <td className="p-4">
+            <Button
+              onClick={() => handleStatusUpdate(ticket.ID, 'Completed')}
+              className="bg-green-600 text-white text-xs px-3 py-1"
+            >
+              Completed
+            </Button>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+{/* 3️⃣ Completed Tickets Table */}
+<h3 className="text-lg font-bold text-gray-700 mt-10">Completed Tickets</h3>
+<div className="bg-white rounded-xl shadow overflow-x-auto">
+  <table className="min-w-full text-sm text-gray-700">
+    <thead className="bg-gray-200 text-gray-800 font-semibold">
+      <tr>
+        <th className="p-4 text-left">Employee ID</th>
+        <th className="p-4 text-left">ID</th>
+        <th className="p-4 text-left">Title</th>
+        <th className="p-4 text-left">Priority</th>
+        <th className="p-4 text-left">Timestamp</th>
+        <th className="p-4 text-left">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {tickets.filter(t => t.Status === 'Completed').map((ticket, i) => (
+        <tr key={i} className="border-t hover:bg-gray-50">
+          <td className="p-4">{ticket.EmployeeID || 'EMP-001'}</td>
+          <td className="p-4 font-semibold">{ticket.ID}</td>
+          <td className="p-4">{ticket.Title}</td>
+          <td className="p-4">{ticket.Priority}</td>
+          <td className="p-4">{ticket.Timestamp}</td>
+          <td className="p-4">
+            <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Completed</span>
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+
+
+
+          
         </div>
       </div>
     </div>

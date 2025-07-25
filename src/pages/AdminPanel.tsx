@@ -83,12 +83,34 @@ const AdminPanel = () => {
     },
   ];
 
-  const adminName = localStorage.getItem('adminName') || 'Admin';
-  const adminId = localStorage.getItem('adminId') || 'ADMIN001';
-  const adminDesignation = localStorage.getItem('adminDesignation') || 'HR Manager';
-  const adminDepartment = localStorage.getItem('adminDepartment') || 'Human Resources';
-  const adminJoinedOn = localStorage.getItem('adminJoinedOn') || '01-Jan-2024';
-  const adminPhotoUrl = localStorage.getItem('adminProfilePhotoUrl');
+  // Fetch admin details from localStorage (prefer user* keys for admin)
+  const adminName = localStorage.getItem('userName') || localStorage.getItem('adminName') || 'Admin';
+  const adminId = localStorage.getItem('userId') || localStorage.getItem('adminId') || 'ADMIN001';
+  const adminDesignation = localStorage.getItem('userDesignation') || localStorage.getItem('adminDesignation') || 'HR Manager';
+  const adminDepartment = localStorage.getItem('userDepartment') || localStorage.getItem('adminDepartment') || 'Human Resources';
+  const adminJoinedOn = localStorage.getItem('userJoinedOn') || localStorage.getItem('adminJoinedOn') || '01-Jan-2024';
+
+  // Fetch admin image using profile.js logic (as in Dashboard.tsx)
+  const [adminPhotoUrl, setAdminPhotoUrl] = React.useState<string | null>(null);
+  useEffect(() => {
+    const empId = localStorage.getItem('userId') || localStorage.getItem('EMP_ID');
+    const role = localStorage.getItem('userRole') === 'admin' ? 'Admin' : 'Employees';
+    const scriptUrl = 'https://script.google.com/macros/s/AKfycbz0b9c2rTYUGRSyVbbsXVcnenIFOIbsuQY2JrvP_Ar65QW1fIJcv61Y39aXA-VOing0dg/exec';
+    if (!empId) return;
+    fetch(`${scriptUrl}?EMP_ID=${empId}&role=${role}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.IMAGE_URL) {
+          fetch(`${scriptUrl}?fileId=${data.IMAGE_URL}`)
+            .then(res => res.text())
+            .then(dataUri => setAdminPhotoUrl(dataUri))
+            .catch(() => setAdminPhotoUrl(null));
+        } else {
+          setAdminPhotoUrl(null);
+        }
+      })
+      .catch(() => setAdminPhotoUrl(null));
+  }, []);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 const profileRef = useRef<HTMLDivElement>(null);
 
@@ -201,13 +223,19 @@ useEffect(() => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="col-span-2 bg-gradient-to-r from-[#32d399] via-[#16a085] to-[#0e7662] p-6 rounded-lg shadow flex flex-col md:flex-row items-center md:items-start gap-6">
-              <img src={adminPhotoUrl || '/Dhanush.jpg'} alt="Admin" className="w-36 h-36 rounded-full object-cover border-4 border-white shadow-md" />
+            {adminPhotoUrl ? (
+              <img src={adminPhotoUrl} alt="Admin" className="w-36 h-36 rounded-full object-cover border-4 border-white shadow-md" />
+            ) : (
+              <div className="w-36 h-36 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-5xl font-bold border-4 border-white shadow-md">
+                {adminName ? adminName[0] : 'A'}
+              </div>
+            )}
               <div className="text-white text-sm space-y-2 md:text-base">
                 <p className="font-bold text-xl">{adminName}</p>
                 <p className="font-bold">Admin ID: {adminId}</p>
                 <p className="font-bold">Designation: {adminDesignation}</p>
                 <p className="font-bold">Department: {adminDepartment}</p>
-                <p className="font-bold">Joined On: {adminJoinedOn}</p>
+                <p className="font-bold">Joined On: {adminJoinedOn.split('T')[0]}</p>
               </div>
             </div>
 
