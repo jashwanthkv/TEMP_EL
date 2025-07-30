@@ -1,0 +1,54 @@
+.projectTableScroll {
+  max-height: 320px;
+  overflow-y: auto;
+  min-width: 420px;
+  width: 100%;
+}
+.pieChartContainerWide {
+  width: 320px;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.projectColorDotGreen1 { background: #1fd446; }
+.projectColorDotGreen2 { background: #13b13b; }
+.projectColorDotBlue { background: #1f77b4; }
+.projectColorDotOrange { background: #ff7f0e; }
+.projectColorDotGreen3 { background: #2ca02c; }
+.projectColorDotRed { background: #d62728; }
+.projectColorDotPurple { background: #9467bd; }
+.projectColorDotBrown { background: #8c564b; }
+.projectColorDotPink { background: #e377c2; }
+.projectColorDotGray { background: #7f7f7f; }
+.projectColorDotOlive { background: #bcbd22; }
+.projectColorDotCyan { background: #17becf; }
+.barChartContainer {
+  min-height: 400px;
+}
+.projectColorDot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+.pieChartContainer {
+  width: 33%;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.pieChartTotalTime {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-align: center;
+}

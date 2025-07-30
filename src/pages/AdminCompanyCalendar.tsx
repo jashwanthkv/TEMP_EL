@@ -19,7 +19,8 @@ interface Event {
   StartTime: string; // Format: 'HH:mm'
   EndTime: string;   // Format: 'HH:mm'
 }
-
+const BACK_URL="https://script.google.com/macros/s/AKfycbxg9PC7Mp0bFu_aJ3iT9TclwPuuMq_ShXy-5-RsoL52jXy38R2m2V_7PJKkloBhZ4iY/exec";
+const back="https://script.google.com/macros/s/AKfycbwoLodscz8lOp0VBX0KcIz0oCAIgM9rgo9Ursefn9FnzB83fC7k1FL5WL7z0lSPLk2DBQ/exec";
 const CompanyCalendar: React.FC = () => {
   const navigate = useNavigate();
   const today = new Date();
@@ -31,7 +32,8 @@ const CompanyCalendar: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const profileRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
   
     // Close on outside click
     React.useEffect(() => {
@@ -50,6 +52,54 @@ const CompanyCalendar: React.FC = () => {
     return new Date(year, month - 1, day);
   };
 
+  const getEventForDate = (date: Date) =>
+    events.filter((e) => {
+      const eventDate = parseDate(e.Date);
+      return eventDate && isSameDay(eventDate, date);
+    });
+
+  const handleDateSClick = (date: Date) => {
+    setSelectedDate(date);
+    setModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setModalOpen(false);
+  };
+
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${BACK_URL}?action=upcoming`);
+        const data = await res.json();
+        setEvents(data.events || []);
+      } catch (err) {
+        console.error('Failed to load events:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+    window.addEventListener('focus', fetchEvents);
+    return () => window.removeEventListener('focus', fetchEvents);
+  }, []);
+
+  const getBoxsColor = (count: number) => {
+    if (count === 0) return 'bg-white';
+    if (count === 1) return 'bg-green-100';
+    if (count === 2) return 'bg-orange-200';
+    return 'bg-red-300';
+  };
+
+  const starts = startOfWeek(startOfMonth(today), { weekStartsOn: 1 });
+  const ends = endOfWeek(endOfMonth(today), { weekStartsOn: 1 });
+  const day: Date[] = [];
+  for (let d = starts; d <= ends; d = addDays(d, 1)) {
+    day.push(d);
+  }
+
   const formatDate = (date: Date): string => format(date, 'dd/MM/yyyy');
 
   const getEventsForDate = (date: Date) =>
@@ -60,22 +110,58 @@ const CompanyCalendar: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleAddOrEditEvent = () => {
-    if (!newEvent.Title || !newEvent.Date || !newEvent.Description || !newEvent.StartTime || !newEvent.EndTime) return;
+  const handleAddOrEditEvent = async () => {
+  if (
+    !newEvent.Title ||
+    !newEvent.Date ||
+    !newEvent.Description ||
+    !newEvent.StartTime ||
+    !newEvent.EndTime
+  ) {
+    alert("All fields are required.");
+    return;
+  }
 
-    if (isEditing && editIndex !== null) {
-      const updated = [...events];
-      updated[editIndex] = newEvent as Event;
-      setEvents(updated);
-    } else {
+  try {
+    const formData = new URLSearchParams();
+    formData.append("action", "addEvent");
+    formData.append("title", newEvent.Title.trim());
+    formData.append("date", newEvent.Date.trim()); // Should be in DD/MM/YYYY format
+    formData.append("start", newEvent.StartTime.trim());
+    formData.append("end", newEvent.EndTime.trim());
+    formData.append("description", newEvent.Description.trim());
+
+    const response = await fetch(
+      "https://script.google.com/macros/s/AKfycbwoLodscz8lOp0VBX0KcIz0oCAIgM9rgo9Ursefn9FnzB83fC7k1FL5WL7z0lSPLk2DBQ/exec",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formData.toString(),
+      }
+    );
+
+    const result = await response.json();
+    console.log(result);
+
+    if (result.status === "success") {
+      alert("Event added successfully!");
       setEvents([...events, newEvent as Event]);
+      setShowAddForm(false);
+      setNewEvent({});
+      setIsEditing(false);
+      setEditIndex(null);
+    } else {
+      alert("Failed to add event: " + result.message);
     }
+  } catch (err) {
+    console.error("Error adding event:", err);
+    alert("An error occurred while adding the event.");
+  }
+};
 
-    setShowAddForm(false);
-    setNewEvent({});
-    setIsEditing(false);
-    setEditIndex(null);
-  };
+
 
   const handleDeleteEvent = (index: number) => {
     const filtered = getEventsForDate(selectedDate!);
@@ -139,7 +225,7 @@ const CompanyCalendar: React.FC = () => {
                     <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg z-50">
                       <button
                         onClick={() => {
-                          navigate('/profile');
+                          navigate('/admin/profile');
                           setIsProfileOpen(false);
                         }}
                         className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"

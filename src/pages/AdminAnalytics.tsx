@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Home, Bell, User, UserCircle } from 'lucide-react';
@@ -48,6 +48,8 @@ const AdminAnalytics = () => {
   const [chartData, setChartData] = useState<Employee[]>([]);
   const [employeeOfMonth, setEmployeeOfMonth] = useState<Employee | null>(null);
   const [employeeOfYear, setEmployeeOfYear] = useState<Employee | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const monthlyData = allData[selectedYear]?.[selectedMonth] || [];
@@ -92,6 +94,17 @@ const AdminAnalytics = () => {
     }
   }, [selectedYear, selectedMonth]);
 
+  // Close profile dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <div className="bg-gray-50 w-full min-h-screen p-0 m-0">
       {/* Header */}
@@ -108,26 +121,34 @@ const AdminAnalytics = () => {
           <span className="text-base font-bold text-green-700">EMPWR</span>
 
           <button
-  onClick={() => navigate('/notifications')}
-  className="relative text-green-800 hover:text-green-900"
->
-  <Bell className="h-5 w-5" />
-</button>
+            onClick={() => navigate('/notifications')}
+            className="relative text-green-800 hover:text-green-900"
+          >
+            <Bell className="h-5 w-5" />
+          </button>
 
-
-          <div className="relative group">
-            <button className="w-9 h-9 flex items-center justify-center hover:bg-green-100 rounded-full">
+          {/* Profile (Click to toggle) */}
+          <div className="relative" ref={profileRef}>
+            <button
+              className="w-9 h-9 flex items-center justify-center hover:bg-green-100 rounded-full"
+              onClick={() => setIsProfileOpen((prev) => !prev)}
+            >
               <User className="w-4 h-4 text-green-700" />
             </button>
-            <div className="absolute right-0 mt-1 w-40 bg-white shadow-lg rounded-md opacity-0 group-hover:opacity-100 group-hover:translate-y-1 transition-all duration-200 z-50">
-              <button
-                onClick={() => navigate('/profile')}
-                className="w-full px-3 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
-              >
-                <UserCircle className="w-4 h-4 text-green-600" />
-                View Profile
-              </button>
-            </div>
+            {isProfileOpen && (
+              <div className="absolute right-0 mt-1 w-40 bg-white shadow-lg rounded-md z-50">
+                <button
+                  onClick={() => {
+                    navigate('/admin/profile');
+                    setIsProfileOpen(false);
+                  }}
+                  className="w-full px-3 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
+                >
+                  <UserCircle className="w-4 h-4 text-green-600" />
+                  View Profile
+                </button>
+              </div>
+            )}
           </div>
 
           <button onClick={() => navigate('/admin')} className="text-green-700 hover:bg-green-100 p-2 rounded-full transition">

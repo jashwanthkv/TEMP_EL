@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Plus, Bell, Home, User, UserCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,6 +19,18 @@ const AdminTrainingCourses = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [newCourse, setNewCourse] = useState({ title: '', platform: '', link: '' });
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const [courses, setCourses] = useState<Course[]>([
     { id: '1', title: 'React Advanced', platform: 'Udemy', link: '#' },
@@ -41,7 +53,7 @@ const AdminTrainingCourses = () => {
 
   const handleAddCourse = () => {
     if (newCourse.title && newCourse.platform && newCourse.link) {
-      const newId = `${Date.now()}`; // unique ID
+      const newId = `${Date.now()}`;
       setCourses(prev => [...prev, { ...newCourse, id: newId }]);
       setNewCourse({ title: '', platform: '', link: '' });
     }
@@ -54,40 +66,55 @@ const AdminTrainingCourses = () => {
   return (
     <div className="p-0 m-0 bg-gray-50 min-h-screen w-full">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-2 flex justify-between items-center w-full min-h-[70px]">
+      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <img src="/logos.png" alt="Logo" className="h-10 w-auto object-contain" />
           <div>
             <p className="text-lg font-bold text-green-700 leading-none">EPICAL LAYOUTS PVT LTD</p>
-            <p className="text-base font-semibold text-gray-600">Training & Courses</p>
+            <p className="text-base font-semibold text-gray-600">Company Calendar</p>
           </div>
         </div>
         <div className="flex items-center space-x-6">
           <span className="text-lg font-bold text-green-700">EMPWR</span>
-          <button className="relative text-green-700 hover:text-green-800">
-            <Bell className="h-6 w-6" />
+          <button
+            onClick={() => navigate('/notifications')}
+            className="relative text-green-800 hover:text-green-900"
+          >
+            <Bell className="h-5 w-5" />
           </button>
-          <div className="relative group">
-            <button className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full">
+          <div className="relative" ref={profileRef}>
+            <button
+              onClick={() => setIsProfileOpen(prev => !prev)}
+              className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full"
+            >
               <User className="w-5 h-5 text-green-700" />
             </button>
-            <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg opacity-0 group-hover:opacity-100 group-hover:translate-y-1 transform transition-all duration-200 z-50">
-              <button
-                onClick={() => navigate('/profile')}
-                className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
-              >
-                <UserCircle className="w-4 h-4 text-green-600" />
-                View Profile
-              </button>
-            </div>
+            {isProfileOpen && (
+              <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg z-50">
+                <button
+                  onClick={() => {
+                    navigate('/admin/profile');
+                    setIsProfileOpen(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
+                >
+                  <UserCircle className="w-4 h-4 text-green-600" />
+                  View Profile
+                </button>
+              </div>
+            )}
           </div>
-          <button onClick={() => navigate('/admin')} className="text-green-700 hover:bg-green-100 p-2 rounded-full transition">
-            <Home className="h-5 w-5" />
+          <button
+            onClick={() => navigate('/admin')}
+            className="w-10 h-10 flex items-center justify-center text-green-700 hover:bg-green-100 rounded-full"
+            aria-label="Dashboard"
+          >
+            <Home className="w-5 h-5" />
           </button>
         </div>
       </header>
 
-      {/* Centered Search */}
+      {/* Search */}
       <div className="flex justify-center mb-4 mt-4">
         <input
           type="text"
@@ -98,7 +125,7 @@ const AdminTrainingCourses = () => {
         />
       </div>
 
-      {/* Add Course Section */}
+      {/* Add Course */}
       <div className="bg-white px-4 py-3 rounded-lg shadow-sm border mb-6 mx-4">
         <h2 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
           <Plus className="h-5 w-5 text-green-600" /> Add New Course
@@ -134,7 +161,7 @@ const AdminTrainingCourses = () => {
         </button>
       </div>
 
-      {/* Added Courses */}
+      {/* Course List */}
       <h2 className="text-lg font-bold text-gray-700 mb-2 px-4">Added Courses</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 px-4 mb-6">
         {filteredCourses.map(course => (
@@ -159,41 +186,76 @@ const AdminTrainingCourses = () => {
         ))}
       </div>
 
-      {/* Employee Enrollments */}
-      <div className="px-4 pb-6">
+      {/* Enrollments */}
+      <div className="px-4 pb-10">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Employee Enrollments</h2>
 
-        {/* Section 1: Employees Enrolled */}
-        <h3 className="text-lg font-semibold text-green-700 mb-2">Employees Enrolled</h3>
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-  {enrollments.map((enroll, idx) => {
-    const course = courses.find(c => c.id === enroll.courseId);
-    if (!course) return null;
-    return (
-      <div key={idx} className="bg-white p-6 rounded-lg shadow-md border">
-        <h3 className="text-lg font-semibold text-gray-800 mb-1">{course.title}</h3>
-        <p className="text-gray-600">Employee: <strong>{enroll.employee}</strong></p>
-      </div>
-    );
-  })}
-</div>
+        {/* Enrolled Courses Table */}
+        <h3 className="text-lg font-semibold text-green-700 mb-3">Employees Enrolled</h3>
+        <div className="overflow-x-auto rounded-lg shadow mb-6">
+          <table className="min-w-full bg-white border border-gray-200 text-sm">
+            <thead className="bg-green-100 text-gray-800">
+              <tr>
+                <th className="px-4 py-3 text-left">Employee ID</th>
+                <th className="px-4 py-3 text-left">Name</th>
+                <th className="px-4 py-3 text-left">Course</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Enrollment Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {enrollments
+                .filter((e) => e.progress < 100)
+                .map((enroll, idx) => {
+                  const course = courses.find((c) => c.id === enroll.courseId);
+                  if (!course) return null;
 
-
-        {/* Section 2: Completed Courses */}
-        <h3 className="text-lg font-semibold text-green-700 mb-2">Courses Completed</h3>
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-  {enrollments
-    .filter(e => e.progress === 100)
-    .map((enroll, idx) => {
-      const course = courses.find(c => c.id === enroll.courseId);
-      if (!course) return null;
-      return (
-        <div key={idx} className="bg-white p-4 rounded-lg shadow border">
-          <p className="text-gray-800 font-medium">Course: {course.title}</p>
-          <p className="text-gray-600">Employee: {enroll.employee}</p>
+                  return (
+                    <tr key={idx} className="border-t border-gray-200">
+                      <td className="px-4 py-3">EMP{1000 + idx}</td>
+                      <td className="px-4 py-3">{enroll.employee}</td>
+                      <td className="px-4 py-3">{course.title}</td>
+                      <td className="px-4 py-3 text-yellow-600 font-medium">Enrolled</td>
+                      <td className="px-4 py-3">{new Date().toLocaleDateString()}</td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
         </div>
-              );
-            })}
+
+        {/* Completed Courses Table */}
+        <h3 className="text-lg font-semibold text-green-700 mt-8 mb-3">Courses Completed</h3>
+        <div className="overflow-x-auto rounded-lg shadow">
+          <table className="min-w-full bg-white border border-gray-200 text-sm">
+            <thead className="bg-green-100 text-gray-800">
+              <tr>
+                <th className="px-4 py-3 text-left">Employee ID</th>
+                <th className="px-4 py-3 text-left">Name</th>
+                <th className="px-4 py-3 text-left">Course</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Completion Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {enrollments
+                .filter((e) => e.progress === 100)
+                .map((enroll, idx) => {
+                  const course = courses.find((c) => c.id === enroll.courseId);
+                  if (!course) return null;
+
+                  return (
+                    <tr key={idx} className="border-t border-gray-200">
+                      <td className="px-4 py-3">EMP{1000 + idx}</td>
+                      <td className="px-4 py-3">{enroll.employee}</td>
+                      <td className="px-4 py-3">{course.title}</td>
+                      <td className="px-4 py-3 text-green-600 font-medium">Completed</td>
+                      <td className="px-4 py-3">{new Date().toLocaleDateString()}</td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

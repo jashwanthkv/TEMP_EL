@@ -16,7 +16,10 @@ import {  Bell, Home, User, UserCircle } from 'lucide-react';
 
 
 const COLORS = ['#FF69B4', '#FFA500', '#00CED1', '#4CAF50', '#8E44AD'];
+// Main timesheet actions URL (keep original)
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyo3pCBPS_ZvK6h4kQbmOU_cZtUnEr4Lw_SbuPZ9Zi3C6pLsk0CFxMYA196bvFwY0XcvA/exec";
+// AdminProject URL for fetching active projects only
+const PROJECTS_URL = "https://script.google.com/macros/s/AKfycbwWy9JiCu0WPRQjDyEe5tG6LrdQSxIYkLPJS94bsOJsQwRovMz24oADW9SaY3EddjwT/exec";
 
 // Project names in consistent order for color assignment
 const PROJECT_NAMES = ['Alpha', 'Beta', 'Gamma', 'Delta'];
@@ -143,6 +146,8 @@ const getRunningHeight = (start: string) => {
 };
 
 export default function Timesheet() {
+  // State for active projects
+  const [activeProjects, setActiveProjects] = useState<string[]>([]);
   const navigate = useNavigate();
   const [project, setProject] = useState('');
   const [task, setTask] = useState('');
@@ -441,16 +446,30 @@ export default function Timesheet() {
     }
   }, [fetchTimesheetData]);
 
+  // Fetch active projects from Apps Script (AdminProject URL)
+  useEffect(() => {
+    async function fetchActiveProjects() {
+      try {
+        const url = `${PROJECTS_URL}?action=list`;
+        const res = await fetch(url);
+        const data = await res.json();
+        // Only include projects with status 'Active'
+        const active = Array.isArray(data)
+          ? data.filter((p: { status: string }) => p.status === 'Active').map((p: { name: string }) => p.name)
+          : [];
+        setActiveProjects(active);
+      } catch (err) {
+        setActiveProjects([]);
+      }
+    }
+    fetchActiveProjects();
+  }, []);
   // Load existing timesheets from Google Apps Script
   useEffect(() => {
-    // Ensure spreadsheetId exists in localStorage
     const spreadsheetId = ensureSpreadsheetId();
     if (!spreadsheetId) {
       console.warn('No spreadsheetId found in localStorage. Using default or prompting user.');
-      // You might want to set a default spreadsheetId here or redirect to a setup page
-      // For now, we'll continue without it (backend will use default)
     }
-    
     loadTimesheetData();
   }, [loadTimesheetData]);
 
@@ -1375,10 +1394,13 @@ useEffect(() => {
                 <Select value={addEntryProject} onValueChange={setAddEntryProject}>
                   <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Alpha">Alpha</SelectItem>
-                    <SelectItem value="Beta">Beta</SelectItem>
-                    <SelectItem value="Gamma">Gamma</SelectItem>
-                    <SelectItem value="Delta">Delta</SelectItem>
+                    {activeProjects.length > 0 ? (
+                      activeProjects.map((proj) => (
+                        <SelectItem key={proj} value={proj}>{proj}</SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>No active projects available</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -1444,10 +1466,15 @@ useEffect(() => {
                 <Select value={project} onValueChange={setProject} >
                   <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Alpha">Alpha</SelectItem>
-                    <SelectItem value="Beta">Beta</SelectItem>
-                    <SelectItem value="Gamma">Gamma</SelectItem>
-                    <SelectItem value="Delta">Delta</SelectItem>
+                    {activeProjects.length > 0 ? (
+                      activeProjects
+                        .filter((proj) => typeof proj === 'string' && proj.trim() !== '')
+                        .map((proj) => (
+                          <SelectItem key={proj} value={proj}>{proj}</SelectItem>
+                        ))
+                    ) : (
+                      <SelectItem value="no-projects" disabled>No active projects available</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

@@ -1,4 +1,3 @@
-// UploadPayslips.tsx
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
@@ -16,6 +15,7 @@ const UploadPayslips = () => {
   const [empId, setEmpId] = useState('');
   const [payslipFile, setPayslipFile] = useState<File | null>(null);
   const [recentPayslips, setRecentPayslips] = useState<any[]>([]);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false); // ✅ state for profile dropdown
 
   useEffect(() => {
     const mockRequests = [
@@ -111,38 +111,52 @@ const UploadPayslips = () => {
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-white">
       {/* Header */}
       <header className="w-full bg-white shadow-md border-b px-6 py-4 flex justify-between items-center sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <img src="/logos.png" alt="Logo" className="h-10 object-contain" />
-          <div>
-            <p className="text-lg font-bold text-green-700 leading-none">EPICAL LAYOUTS PVT LTD</p>
-            <p className="text-sm text-gray-500">Document Management Panel</p>
-          </div>
-        </div>
-        <div className="flex items-center space-x-6">
-          <span className="text-lg font-semibold text-green-700">EMPWR</span>
-          <Bell className="h-5 w-5 text-green-700" />
-          <div className="relative group">
-            <button className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full transition">
-              <User className="w-5 h-5 text-green-700" />
-            </button>
-            <div className="absolute right-0 mt-2 w-44 bg-white shadow-xl rounded-md opacity-0 group-hover:opacity-100 group-hover:translate-y-1 transform transition-all duration-200 z-50">
-              <button
-                onClick={() => navigate('/profile')}
-                className="w-full px-4 py-2 text-left hover:bg-green-50 flex items-center gap-2"
-              >
-                <UserCircle className="w-4 h-4 text-green-600" />
-                View Profile
-              </button>
-            </div>
-          </div>
+  <div className="flex items-center gap-4">
+    <img src="/logos.png" alt="Logo" className="h-10 object-contain" />
+    <div>
+      <p className="text-lg font-bold text-green-700 leading-none">EPICAL LAYOUTS PVT LTD</p>
+      <p className="text-sm text-gray-500">Document Management Panel</p>
+    </div>
+  </div>
+  <div className="flex items-center space-x-6 relative">
+    <span className="text-lg font-semibold text-green-700">EMPWR</span>
+    <Bell className="h-5 w-5 text-green-700" />
+    
+    {/* Profile icon */}
+    <div className="relative">
+      <button
+        onClick={() => setProfileMenuOpen((prev) => !prev)}
+        className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full transition"
+      >
+        <User className="w-5 h-5 text-green-700" />
+      </button>
+
+      {/* Conditional dropdown */}
+      {profileMenuOpen && (
+        <div className="absolute right-0 mt-2 w-44 bg-white shadow-xl rounded-md z-50">
           <button
-            onClick={() => navigate('/admin')}
-            className="text-green-700 hover:bg-green-100 p-2 rounded-full transition"
+            onClick={() => {
+              setProfileMenuOpen(false);
+              navigate('/admin/profile');
+            }}
+            className="w-full px-4 py-2 text-left hover:bg-green-50 flex items-center gap-2"
           >
-            <Home className="h-5 w-5" />
+            <UserCircle className="w-4 h-4 text-green-600" />
+            View Profile
           </button>
         </div>
-      </header>
+      )}
+    </div>
+
+    <button
+      onClick={() => navigate('/admin')}
+      className="text-green-700 hover:bg-green-100 p-2 rounded-full transition"
+    >
+      <Home className="h-5 w-5" />
+    </button>
+  </div>
+</header>
+
 
       {/* Main */}
       <main className="max-w-7xl mx-auto px-4 py-10">

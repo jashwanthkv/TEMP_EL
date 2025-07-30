@@ -1,10 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Bell, Home, User, UserCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Bell, User, UserCircle } from 'lucide-react';
-
-
 
 import UpdateProfile from '@/components/ui/UpdateProfile';
 import CompanyInfo from '@/components/ui/CompanyInfo';
@@ -15,7 +12,6 @@ import BackupRestore from '@/components/ui/BackupRestore';
 import ChangePassword from '@/components/ui/ChangePassword';
 import NotificationsSettings from '@/components/ui/NotificationsSettings';
 import FeedbackSupport from '@/components/ui/FeedbackSupport';
-
 
 const sections = [
   { label: '👤 Update Profile', key: 'update-profile' },
@@ -32,6 +28,8 @@ const sections = [
 const AdminSettings = () => {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(sections[0].key);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   const renderContent = () => {
     switch (selected) {
@@ -48,8 +46,19 @@ const AdminSettings = () => {
     }
   };
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <img src="/logos.png" alt="Logo" className="h-10 w-auto object-contain" />
@@ -65,30 +74,40 @@ const AdminSettings = () => {
           <button className="relative text-green-700 hover:text-green-800">
             <Bell className="h-6 w-6" />
           </button>
-          <div className="relative group">
-            <button className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full">
+
+          {/* Profile Dropdown (click-based) */}
+          <div className="relative" ref={profileRef}>
+            <button
+              onClick={() => setIsProfileOpen(prev => !prev)}
+              className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full"
+            >
               <User className="w-5 h-5 text-green-700" />
             </button>
-            <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg opacity-0 group-hover:opacity-100 group-hover:translate-y-1 transform transition-all duration-200 z-50">
-              <button
-                onClick={() => navigate('/profile')}
-                className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
-              >
-                <UserCircle className="w-4 h-4 text-green-600" />
-                View Profile
-              </button>
-            </div>
+
+            {isProfileOpen && (
+              <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg z-50">
+                <button
+                  onClick={() => {
+                    navigate('/admin/profile');
+                    setIsProfileOpen(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
+                >
+                  <UserCircle className="w-4 h-4 text-green-600" />
+                  View Profile
+                </button>
+              </div>
+            )}
           </div>
 
           <button onClick={() => navigate('/admin')} className="text-green-700 hover:bg-green-100 p-2 rounded-full transition">
             <Home className="h-5 w-5" />
           </button>
-
-          
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Main Layout */}
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 px-4 py-6">
         {/* Sidebar */}
         <div className="space-y-2">
           {sections.map(sec => (

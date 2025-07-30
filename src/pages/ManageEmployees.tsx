@@ -20,7 +20,7 @@ function jsonpRequest(url: string): Promise<any> {
 
 import React, { useState, useEffect, useRef } from 'react';
 // Backend API URL
-const EMPLOYEE_API_URL = "https://script.google.com/macros/s/AKfycby1Uip8Z5Vqn7iOYzsa1y0qH1jgYVzKDwPnJWshg5yCGdTjNBDShhb2Vp9E3ASK2qy6/exec";
+const EMPLOYEE_API_URL = "https://script.google.com/macros/s/AKfycbwnEjoeu2nrlKh4vAdbd30mgQpBA4qkyCar8i_GnozzgHzFG23xlCOpODAjIB4LmHSq/exec";
 
 // Map frontend EmployeeData to backend parameter names for add
 function mapToBackendParams(data: EmployeeData) {
@@ -31,17 +31,17 @@ function mapToBackendParams(data: EmployeeData) {
     designation: data.designation,
     department: data.department,
     cMailId: data.companyEmail,
-    password: "123456", // Or get from form if needed
+    password: "123456",
     MobileNo: data.mobile,
     JoiningDate: data.joiningDate,
     role: data.role,
-    status: data.status || "inactive", // Added status field
+    status: data.status || "active",
     gender: data.gender,
     dateOfBirth: data.dob,
     pMailId: data.personalEmail,
     communicationAddress: data.address,
     PANCard: data.pan,
-    AadhaarCard: data.aadhaar,
+    AadhaarCard: data.aadhar,       // ✅ FIXED spelling
     BankName: data.bankName,
     BankAccount: data.bankAccount,
     IFSC: data.ifscCode,
@@ -49,9 +49,11 @@ function mapToBackendParams(data: EmployeeData) {
     UAN: data.uanNumber,
     PF_ESI_Status: data.pfEsiStatus,
     manager: data.reportingManager,
+    passport: data.passport,        // ✅ FIXED capital 'P'
+    ctc: data.ctc,
+    Type: data.employmentType || 'full-time',
   };
 }
-
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -87,15 +89,14 @@ type EmployeeData = {
   reportingManager: string;
   role: string;
   employeeId: string;
-  ctc: string;
-  aadhaar: string;
+  aadhar: string;
   pan: string;
   passport: string;
-  otherId: string;
+  ctc: string;
   status?: string;
 };
 
-const initialData: EmployeeData = {
+let initialData: EmployeeData = {
   firstName: '',
   lastName: '',
   dob: '',
@@ -117,12 +118,11 @@ const initialData: EmployeeData = {
   reportingManager: '',
   role: 'employee',
   employeeId: '',
-  ctc: '',
-  aadhaar: '',
+  aadhar: '',
   pan: '',
   passport: '',
-  otherId: '',
-  status: 'inactive',
+  ctc: '',
+  status: 'active',
 };
 
 type FormType = 'add' | 'update';
@@ -137,6 +137,10 @@ const ManageEmployees = () => {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
+  const [employeeCache, setEmployeeCache] = useState<{ [id: string]: EmployeeData }>({});
+  
+
+
   
   useEffect(() => {
     function handleClickOutside(event) {
@@ -153,90 +157,102 @@ const ManageEmployees = () => {
       fetchEmployeeList();
     }
   }, [formType]);
+  function formatDateToInput(dateString: string) {
+    if (!dateString) return '';
+    return new Date(dateString).toISOString().split('T')[0]; // formats to yyyy-MM-dd
+  }
+
 
   const fetchEmployeeList = async () => {
-    setLoadingEmployees(true);
-    try {
-      const url = EMPLOYEE_API_URL + `?action=getEmployeeList`;
-      const data = await jsonpRequest(url);
-      if (data.status === "success") {
-        setEmployeeList(data.employees.map((emp: any) => ({
-          id: emp.empId,
-          name: `${emp.FirstName} ${emp.lastName}`
-        })));
-      } else {
-        alert("Failed to fetch employee list");
-      }
-    } catch (err) {
-      alert("Error fetching employee list");
-    } finally {
-      setLoadingEmployees(false);
+  setLoadingEmployees(true);
+  try {
+    const url = EMPLOYEE_API_URL + `?action=getEmployeeList`;
+    const res = await fetch(url); // 🔁 using fetch, not jsonpRequest
+    const data = await res.json();
+    
+    if (data.status === "success") {
+      setEmployeeList(data.employees.map((emp: any) => ({
+        id: emp.empId,
+        name: emp.name
+      })));
+    } else {
+      alert("Failed to fetch employee list");
     }
-  };
+  } catch (err) {
+    alert("Error fetching employee list");
+  } finally {
+    setLoadingEmployees(false);
+  }
+};
+
 
   const handleChange = (field: keyof EmployeeData, value: string) => {
     setEmployeeData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleFetch = async () => {
-    if (!updateId) return;
-    
-    const url = EMPLOYEE_API_URL + `?action=getEmployeeById&id=${encodeURIComponent(updateId)}`;
-    try {
-      const data = await jsonpRequest(url);
-      if (data.status === "found") {
-        const fetchedData = {
-          ...initialData,
-          firstName: data.employee.FirstName || '',
-          lastName: data.employee.lastName || '',
-          dob: data.employee.dateOfBirth || '',
-          gender: data.employee.gender || '',
-          mobile: data.employee.MobileNo || '',
-          personalEmail: data.employee.pMailId || '',
-          companyEmail: data.employee.cMailId || '',
-          address: data.employee.communicationAddress || '',
-          bankName: data.employee.BankName || '',
-          bankAccount: data.employee.BankAccount || '',
-          ifscCode: data.employee.IFSC || '',
-          salaryGrade: data.employee.SalaryGrade || '',
-          uanNumber: data.employee.UAN || '',
-          pfEsiStatus: data.employee.PF_ESI_Status || '',
-          joiningDate: data.employee.JoiningDate || '',
-          employmentType: '',
-          designation: data.employee.designation || '',
-          department: data.employee.department || '',
-          reportingManager: data.employee.manager || '',
-          role: data.employee.role || 'employee',
-          employeeId: data.employee.empId || '',
-          ctc: '',
-          aadhaar: data.employee.AadhaarCard || '',
-          pan: data.employee.PANCard || '',
-          passport: '',
-          otherId: '',
-          status: data.employee.status || 'inactive',
-        };
-        
-        setEmployeeData(fetchedData);
-      } else {
-        alert(data.message);
-      }
-    } catch (err) {
-      alert("Failed to fetch employee details.");
+  const handleFetch = async (selectedId: string) => {
+  setUpdateId(selectedId); // store the selected ID (if needed elsewhere)
+
+  // ✅ Check cache first
+  if (employeeCache[selectedId]) {
+    setEmployeeData(employeeCache[selectedId]);
+    return;
+  }
+
+  const url = EMPLOYEE_API_URL + `?action=getEmployeeById&id=${encodeURIComponent(selectedId)}`;
+  try {
+    const data = await fetch(url).then(res => res.json()); // changed from jsonpRequest
+    if (data.status === "found") {
+      const fetchedData: EmployeeData = {
+        ...initialData,
+        firstName: data.employee.FirstName || '',
+        lastName: data.employee.lastName || '',
+        dob: formatDateToInput(data.employee.dateOfBirth),
+        gender: data.employee.gender || '',
+        mobile: String(data.employee.MobileNo || ''),
+        personalEmail: data.employee.pMailId || '',
+        companyEmail: data.employee.cMailId || '',
+        address: data.employee.communicationAddress || '',
+        bankName: data.employee.BankName || '',
+        bankAccount: String(data.employee.BankAccount || ''),
+        ifscCode: data.employee.IFSC || '',
+        salaryGrade: data.employee.SalaryGrade || '',
+        uanNumber: String(data.employee.UAN || ''),
+        pfEsiStatus: data.employee.PF_ESI_Status || '',
+        joiningDate: formatDateToInput(data.employee.JoiningDate),
+        employmentType: data.employee.Type || '',
+        designation: data.employee.designation || '',
+        department: data.employee.department || '',
+        reportingManager: data.employee.manager || '',
+        role: data.employee.role || 'employee',
+        employeeId: String(data.employee.empId || ''),
+        ctc: String(data.employee.Ctc || ''),
+        aadhar: String(data.employee.AadhaarCard || ''),
+        pan: data.employee.PANCard || '',
+        passport: String(data.employee.Passport || ''),
+        status: data.employee.status || 'inactive',
+
+      };
+
+
+      // ✅ Set form data
+      setEmployeeData(fetchedData);
+
+      // ✅ Cache the result
+      setEmployeeCache(prev => ({ ...prev, [selectedId]: fetchedData }));
+    } else {
+      alert(data.message);
     }
-  };
+  } catch (err) {
+    alert("Failed to fetch employee details.");
+  }
+};
+
 
   const handleSubmit = async () => {
-    if (formType === 'add') {
-      const params = { action: "addEmployee", ...mapToBackendParams(employeeData) };
-      const url = EMPLOYEE_API_URL + "?" + new URLSearchParams(params).toString();
-      try {
-        const data = await jsonpRequest(url);
-        alert(data.message);
-      } catch (err) {
-        alert("Failed to add employee.");
-      }
-    } else if (formType === 'update') {
-      const params = {
+  const params = formType === 'add'
+    ? { action: "addEmployee", ...mapToBackendParams(employeeData) }
+    : {
         action: "update",
         id: updateId,
         empName: employeeData.firstName,
@@ -254,7 +270,7 @@ const ManageEmployees = () => {
         pEmail: employeeData.personalEmail,
         address: employeeData.address,
         pan: employeeData.pan,
-        aadhar: employeeData.aadhaar,
+        aadhar: employeeData.aadhar,
         bankName: employeeData.bankName,
         accountNumber: employeeData.bankAccount,
         ifsc: employeeData.ifscCode,
@@ -262,35 +278,78 @@ const ManageEmployees = () => {
         uan: employeeData.uanNumber,
         pf: employeeData.pfEsiStatus,
         reportingManager: employeeData.reportingManager,
+        passport: employeeData.passport,
+        ctc: employeeData.ctc,
+        type: employeeData.employmentType || 'full-time',
       };
-      const url = EMPLOYEE_API_URL + "?" + new URLSearchParams(params).toString();
-      try {
-        const data = await jsonpRequest(url);
-        alert(data.message);
-      } catch (err) {
-        alert("Failed to update employee.");
-      }
-    }
-  };
 
-  const handleStatusChange = async (newStatus: string) => {
-    if (!updateId) return;
+  const url = EMPLOYEE_API_URL + "?" + new URLSearchParams(params).toString();
+
+  // ✅ DEBUG LOGS
+  console.log("Submitting Employee:", formType);
+  console.log("Aadhar:", params.aadhar);
+  console.log("Passport:", employeeData.passport);
+  console.log("Final URL:", url);
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    alert(data.message);
+  } catch (err) {
+    alert(formType === 'add' ? "Failed to add employee." : "Failed to update employee.");
+  }
+};
+
+
+  // const handleStatusChange = async (newStatus: string) => {
+  //   if (!updateId) return;
     
+  //   const params = {
+  //     action: "freeze",
+  //     id: updateId,
+  //     status: newStatus
+  //   };
+    
+  //   const url = EMPLOYEE_API_URL + "?" + new URLSearchParams(params).toString();
+  //   try {
+  //     const res = await fetch(url);
+  //     let data=await res.json();
+  //     alert(data.message);
+  //     await handleFetch(updateId);
+  //   } catch (err) {
+  //     alert("Failed to change employee status.");
+  //   }
+  // };
+
+  const handleStateChange = async () => {
+    if (!updateId) return;
+
+    const newStatus = employeeData.status === 'active' ? 'inactive' : 'active';
+
     const params = {
-      action: "changeStatus",
+      action: "active", // ✅ Make sure this matches your Apps Script `doGet`
       id: updateId,
       status: newStatus
     };
-    
+
     const url = EMPLOYEE_API_URL + "?" + new URLSearchParams(params).toString();
+
     try {
-      const data = await jsonpRequest(url);
+      const data = await jsonpRequest(url); // ✅ Use JSONP instead of fetch
       alert(data.message);
-      await handleFetch();
+
+      // ✅ Update local state after success
+      setEmployeeData(prev => ({
+        ...prev,
+        status: newStatus
+      }));
     } catch (err) {
-      alert("Failed to change employee status.");
+      alert("Failed to update status.");
+      console.error("Error updating status:", err);
     }
   };
+
+
 
   const isFormValid = employeeData.firstName && employeeData.lastName && employeeData.employeeId;
 
@@ -399,7 +458,7 @@ const ManageEmployees = () => {
                     value={updateId}
                     onValueChange={(value) => {
                       setUpdateId(value);
-                      if (value) handleFetch();
+                      if (value) handleFetch(value); // ✅ fixed here
                     }}
                     disabled={loadingEmployees}
                   >
@@ -414,18 +473,19 @@ const ManageEmployees = () => {
                       ))}
                     </SelectContent>
                   </Select>
+
                 </div>
-                <Button
-                  onClick={handleFetch}
-                  disabled={!updateId || loadingEmployees}
-                  className={`text-white px-4 py-2 rounded-full shadow transition self-end ${
-                    updateId && !loadingEmployees
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-gray-300 cursor-not-allowed'
-                  }`}
-                >
-                  {loadingEmployees ? 'Loading...' : 'Fetch'}
-                </Button>
+                <Button onClick={() => handleFetch(updateId)} // ✅ now this is a function returning a Promise
+              disabled={!updateId || loadingEmployees}
+              className={`text-white px-4 py-2 rounded-full shadow transition self-end ${
+                updateId && !loadingEmployees
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-gray-300 cursor-not-allowed'
+              }`}
+            >
+              {loadingEmployees ? 'Loading...' : 'Fetch'}
+            </Button>
+
               </div>
             </CardContent>
           </Card>
@@ -484,25 +544,9 @@ const ManageEmployees = () => {
 
             <h3 className="text-lg font-semibold text-green-800 border-b pb-1">ID Proofs</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {renderInput('Aadhaar Number', 'aadhaar')}
+              {renderInput('Aadhar Number', 'aadhar')}
               {renderInput('PAN Number', 'pan')}
               {renderInput('Passport Number', 'passport')}
-              <div className="flex flex-col gap-1 w-full">
-                <label className="text-sm font-medium text-gray-700">Other ID Type</label>
-                <Select 
-                  value={employeeData.otherId} 
-                  onValueChange={value => handleChange('otherId', value)}
-                >
-                  <SelectTrigger className="rounded-xl border border-gray-300 shadow-sm">
-                    <SelectValue placeholder="Select Other ID Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="voter">Voter ID</SelectItem>
-                    <SelectItem value="driving">Driving License</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -510,32 +554,20 @@ const ManageEmployees = () => {
         <div className="max-w-5xl mx-auto mt-6 pb-10">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             {formType === 'update' && employeeData.status && (
-              <div className="flex gap-4 order-2 md:order-1">
+              <div className="flex gap-4 order-2 md:order-1 items-center">
                 <Button
-                  onClick={() => handleStatusChange('active')}
-                  disabled={employeeData.status === 'active'}
+                  onClick={handleStateChange}
                   className={`rounded-full px-6 py-2 shadow-md transition ${
-                    employeeData.status !== 'active'
+                    employeeData.status === 'inactive'
                       ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                      : 'bg-red-600 text-white hover:bg-red-700'
                   }`}
                 >
-                  Activate
-                </Button>
-                <Button
-                  onClick={() => handleStatusChange('inactive')}
-                  disabled={employeeData.status === 'inactive'}
-                  className={`rounded-full px-6 py-2 shadow-md transition ${
-                    employeeData.status !== 'inactive'
-                      ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-300 hover:shadow-red-400'
-                      : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-                  }`}
-                >
-                  Deactivate
+                  {employeeData.status === 'inactive' ? 'Activate' : 'Deactivate'}
                 </Button>
               </div>
             )}
-            
+
             <Button
               onClick={handleSubmit}
               disabled={!isFormValid}

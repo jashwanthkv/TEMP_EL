@@ -31,6 +31,235 @@ type SidebarItem = {
 };
 
 const Dashboard = () => {
+  // State for monthly hours
+  const [monthHours, setMonthHours] = useState<number | null>(null);
+  const [monthTarget, setMonthTarget] = useState(192); // Default: 48*4
+  const [monthLoading, setMonthLoading] = useState(true);
+
+  // Timesheet backend URL
+  const TIMESHEET_URL = "https://script.google.com/macros/s/AKfycbyo3pCBPS_ZvK6h4kQbmOU_cZtUnEr4Lw_SbuPZ9Zi3C6pLsk0CFxMYA196bvFwY0XcvA/exec";
+
+  // State for working hours
+  const [weekHours, setWeekHours] = useState<number | null>(null);
+  const [weekTarget, setWeekTarget] = useState(48); // Default target
+  const [weekLoading, setWeekLoading] = useState(true);
+
+  // State for pending requests and loading
+  const [pendingLeaveCount, setPendingLeaveCount] = useState<number | null>(null);
+  const [pendingDocCount, setPendingDocCount] = useState<number | null>(null);
+  const [pendingLoading, setPendingLoading] = useState(true);
+
+  // Apps Script URLs for leave and document requests
+  const LEAVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwiM7SKXbTc0EYAqDqUjRrwzJq8c2_8gYVd_tOi85TV1TRlqSxYI7x91YG4gHt65d5HWw/exec';
+  const DOC_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzcgXozG8UVlaZLUXe3BMJ_TrPS-VMBtkWftPOoUwJSq3ct1GHPAcfJ5Ly7hkcOfCFDXg/exec';
+
+  // Fetch pending leave requests
+  useEffect(() => {
+    const fetchPendingLeave = async () => {
+      const sheetId = localStorage.getItem('spreadsheetId') || '';
+      if (!sheetId) {
+        setPendingLeaveCount(0);
+        setPendingLoading(false);
+        return;
+      }
+      try {
+        const callbackName = 'pendingLeaveCallback_' + Math.round(100000 * Math.random());
+        await new Promise((resolve, reject) => {
+          (window as any)[callbackName] = (data: any) => {
+            if (Array.isArray(data)) {
+              setPendingLeaveCount(data.filter((entry: any) => entry.status?.toLowerCase() === 'pending').length);
+            } else if (data.leaveHistory) {
+              setPendingLeaveCount((data.leaveHistory as any[]).filter((entry: any) => entry.status?.toLowerCase() === 'pending').length);
+            } else {
+              setPendingLeaveCount(0);
+            }
+            delete (window as any)[callbackName];
+            resolve(data);
+          };
+          const script = document.createElement('script');
+          script.src = `${LEAVE_APP_SCRIPT_URL}?sheetId=${sheetId}&callback=${callbackName}`;
+          script.onerror = () => {
+            delete (window as any)[callbackName];
+            reject(new Error('JSONP request failed'));
+          };
+          document.head.appendChild(script);
+        });
+      } catch (error) {
+        setPendingLeaveCount(0);
+      } finally {
+        setPendingLoading(false);
+      }
+    };
+    fetchPendingLeave();
+  }, []);
+
+  // Fetch pending document requests
+  useEffect(() => {
+    const fetchPendingDocs = async () => {
+      const spreadsheetId = localStorage.getItem('spreadsheetId') || '';
+      if (!spreadsheetId) {
+        setPendingDocCount(0);
+        setPendingLoading(false);
+        return;
+      }
+      try {
+        const formData = new URLSearchParams();
+        formData.append('action', 'getAllHistory');
+        formData.append('spreadsheetId', spreadsheetId);
+        const response = await fetch(DOC_APP_SCRIPT_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+          },
+          body: formData,
+        });
+        if (response.ok) {
+          const result = await response.json();
+          if (result.data && Array.isArray(result.data)) {
+            setPendingDocCount(result.data.filter((req: any) => req.status?.toLowerCase() === 'pending').length);
+          } else {
+            setPendingDocCount(0);
+          }
+        } else {
+          setPendingDocCount(0);
+        }
+      } catch (error) {
+        setPendingDocCount(0);
+      } finally {
+        setPendingLoading(false);
+      }
+    };
+    fetchPendingDocs();
+  }, []);
+
+  // Fetch current month's timesheet and calculate hours
+  useEffect(() => {
+    async function fetchMonthHours() {
+      const userEmail = localStorage.getItem('userEmail');
+      const empId = localStorage.getItem('userId');
+      const spreadsheetId = localStorage.getItem('spreadsheetId') || '1WGvnJUF5n1ZoKHk5y8DzztYSuKhuNJBb-mquGwiRZ1w';
+      if (!userEmail || !empId) {
+        setMonthLoading(false);
+        setMonthHours(0);
+        return;
+      }
+      try {
+        const requestData = {
+          action: 'getLogs',
+          email: userEmail,
+          empId: empId,
+          spreadsheetId
+        };
+        const response = await fetch(TIMESHEET_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams(requestData)
+        });
+        if (!response.ok) {
+          setMonthLoading(false);
+          setMonthHours(0);
+          return;
+        }
+        const result = await response.json();
+        // Get allDates and logs
+        const allDates = Array.isArray(result.allDates) ? result.allDates : [];
+        const logs = result.logs || {};
+        // Get current month
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        // Filter dates for current month
+        const monthDates = allDates.filter(dateStr => {
+          const [yyyy, mm] = dateStr.split('-');
+          return Number(mm) === currentMonth && Number(yyyy) === currentYear;
+        });
+        // Calculate total hours for current month
+        let totalSeconds = 0;
+        monthDates.forEach(date => {
+          const entries = logs[date] || [];
+          entries.forEach(entry => {
+            if (entry.end && entry.start) {
+              const start = new Date(`2000-01-01 ${entry.start}`).getTime();
+              const end = new Date(`2000-01-01 ${entry.end}`).getTime();
+              totalSeconds += (end - start) / 1000;
+            } else if (entry.start && (!entry.end || entry.end === '')) {
+              // Running entry: calculate up to now
+              const start = new Date(`2000-01-01 ${entry.start}`).getTime();
+              const nowTime = new Date(`2000-01-01 ${now.toTimeString().slice(0, 8)}`).getTime();
+              totalSeconds += (nowTime - start) / 1000;
+            }
+          });
+        });
+        setMonthHours(totalSeconds / 3600);
+      } catch (err) {
+        setMonthHours(0);
+      } finally {
+        setMonthLoading(false);
+      }
+    }
+    fetchMonthHours();
+  }, []);
+
+  // Fetch last week's timesheet and calculate hours
+  useEffect(() => {
+    async function fetchWeekHours() {
+      const userEmail = localStorage.getItem('userEmail');
+      const empId = localStorage.getItem('userId');
+      const spreadsheetId = localStorage.getItem('spreadsheetId') || '1WGvnJUF5n1ZoKHk5y8DzztYSuKhuNJBb-mquGwiRZ1w';
+      if (!userEmail || !empId) {
+        setWeekLoading(false);
+        setWeekHours(0);
+        return;
+      }
+      try {
+        const requestData = {
+          action: 'getLogs',
+          email: userEmail,
+          empId: empId,
+          spreadsheetId
+        };
+        const response = await fetch(TIMESHEET_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams(requestData)
+        });
+        if (!response.ok) {
+          setWeekLoading(false);
+          setWeekHours(0);
+          return;
+        }
+        const result = await response.json();
+        // Get availableDates (last 7 days) and logs
+        const dates = Array.isArray(result.availableDates) ? result.availableDates : [];
+        const logs = result.logs || {};
+        // Calculate total hours for last 7 days
+        let totalSeconds = 0;
+        dates.forEach(date => {
+          const entries = logs[date] || [];
+          entries.forEach(entry => {
+            if (entry.end && entry.start) {
+              const start = new Date(`2000-01-01 ${entry.start}`).getTime();
+              const end = new Date(`2000-01-01 ${entry.end}`).getTime();
+              totalSeconds += (end - start) / 1000;
+            } else if (entry.start && (!entry.end || entry.end === '')) {
+              // Running entry: calculate up to now
+              const start = new Date(`2000-01-01 ${entry.start}`).getTime();
+              const now = new Date();
+              const currentTime = new Date(`2000-01-01 ${now.toTimeString().slice(0, 8)}`).getTime();
+              totalSeconds += (currentTime - start) / 1000;
+            }
+          });
+        });
+        setWeekHours(totalSeconds / 3600);
+      } catch (err) {
+        setWeekHours(0);
+      } finally {
+        setWeekLoading(false);
+      }
+    }
+    fetchWeekHours();
+  }, []);
   const navigate = useNavigate();
   const userName = localStorage.getItem('userName') || 'Employee';
   const empId = localStorage.getItem('userId') || 'EMP001';
@@ -109,10 +338,74 @@ const Dashboard = () => {
     navigate('/');
   };
 
+  // State for completed courses
+  const [completedCoursesCount, setCompletedCoursesCount] = useState<number | null>(null);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const TRAINING_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwAlAIg39DiQgbYnlivOr9zIowb_2Y3iW9o1kDFBItgMYPxqewxeLX1b7hbrXs61MeWAA/exec';
+
+  useEffect(() => {
+    const sheetId = localStorage.getItem('spreadsheetId');
+    if (!sheetId) {
+      setCompletedCoursesCount(0);
+      setCoursesLoading(false);
+      return;
+    }
+    fetch(`${TRAINING_SCRIPT_URL}?sheetId=${sheetId}`)
+      .then(res => res.json())
+      .then(data => {
+        setCompletedCoursesCount(Array.isArray(data.completed) ? data.completed.length : 0);
+      })
+      .catch(() => setCompletedCoursesCount(0))
+      .finally(() => setCoursesLoading(false));
+  }, []);
+
   const statCards = [
-    { title: '6 projects', subtitle: 'Achievements🏆', color: 'text-green-600' },
-    { title: '160 hrs', subtitle: 'Hours This Month', color: 'text-green-500' },
-    { title: '2', subtitle: 'Pending Requests', color: 'text-red-600' },
+    coursesLoading || completedCoursesCount === null
+      ? {
+          title: (
+            <div className="flex items-center justify-center">
+              <span className="animate-pulse w-16 h-8 bg-gray-200 rounded" />
+            </div>
+          ),
+          subtitle: 'Completed Courses',
+          color: 'text-blue-600',
+        }
+      : {
+          title: `${completedCoursesCount} courses`,
+          subtitle: 'Completed Courses',
+          color: 'text-blue-600',
+        },
+    monthLoading || monthHours === null
+      ? {
+          title: (
+            <div className="flex items-center justify-center">
+              <span className="animate-pulse w-24 h-8 bg-gray-200 rounded" />
+            </div>
+          ),
+          subtitle: 'Hours This Month',
+          color: 'text-green-500',
+        }
+      : {
+          title: `${monthHours.toFixed(1)} hrs`,
+          subtitle: 'Hours This Month',
+          color: 'text-green-500',
+          progress: Math.min(((monthHours as number) / monthTarget) * 100, 100),
+        },
+    pendingLoading || pendingLeaveCount === null || pendingDocCount === null
+      ? {
+          title: (
+            <div className="flex items-center justify-center">
+              <span className="animate-pulse w-8 h-8 bg-gray-200 rounded-full" />
+            </div>
+          ),
+          subtitle: 'Pending Requests',
+          color: 'text-red-600',
+        }
+      : {
+          title: `${pendingLeaveCount} Leave, ${pendingDocCount} Document`,
+          subtitle: 'Pending Requests',
+          color: 'text-red-600',
+        },
   ];
 
   const sidebarItems: SidebarItem[] = [
@@ -120,9 +413,7 @@ const Dashboard = () => {
     { title: 'Leave Request', icon: CalendarIcon, path: '/leave' },
     { title: 'Company Calendar', icon: CalendarIcon, path: '/calendar' },
     { title: 'Document Request', icon: Lock, path: '/requests' },
-    
     { title: 'Training & Courses', icon: Book, path: '/training' },
-    { title: 'Performance Review', icon: BarChart2, path: '/performance' },
     { title: 'Company Achievements', icon: BarChart2, path: '/company' },
     { title: 'Help & Support', icon: HelpCircle, path: '/help' },
 
@@ -247,6 +538,7 @@ useEffect(() => {
 
 const scriptUrl = 'https://script.google.com/macros/s/AKfycbz0b9c2rTYUGRSyVbbsXVcnenIFOIbsuQY2JrvP_Ar65QW1fIJcv61Y39aXA-VOing0dg/exec';
 const [profileImage, setProfileImage] = useState<string | null>(null);
+const [profileLoading, setProfileLoading] = useState(true);
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
@@ -357,11 +649,11 @@ const [profileImage, setProfileImage] = useState<string | null>(null);
               {/* Updated Welcome Card */}
               <div className="col-span-2 bg-gradient-to-r from-[#32d399] via-[#16a085] to-[#0e7662] p-6 rounded-lg shadow flex flex-col md:flex-row items-center md:items-start gap-6">
                 {profileImage ? (
-              <img
-                src={profileImage}
-                alt="Profile"
-                className="w-36 h-36 rounded-full object-cover border-4 border-white shadow-md"
-                />
+                  <img
+                    src={profileImage}
+                    alt="Profile"
+                    className="w-36 h-36 rounded-full object-cover border-4 border-white shadow-md"
+                  />
                 ) : (
                   <div className="w-36 h-36 rounded-full bg-green-100 flex items-center justify-center text-green-700 text-xl font-bold border-4 border-white shadow-md">
                     {userName[0] || 'U'}
@@ -379,20 +671,30 @@ const [profileImage, setProfileImage] = useState<string | null>(null);
 
               {/* Working Time Card */}
               <Card className="shadow-lg h-full">
-              <CardContent className="p-6 flex flex-col justify-between h-full">
-                <div>
-                  <h3 className="text-lg font-semibold text-green-700 mb-2">Working Time</h3>
-                  <p className="text-gray-600 mb-1">This week</p>
-                  <div className="text-2xl font-bold text-green-800 mb-2">43 / 48 hours</div>
-                  <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-                    <div
-                      className="bg-green-500 h-3 rounded-full transition-all duration-500"
-                      style={{ width: `${(43 / 48) * 100}%` }}
-                    />
+                <CardContent className="p-6 flex flex-col justify-between h-full">
+                  <div>
+                    <h3 className="text-lg font-semibold text-green-700 mb-2">Working Time</h3>
+                    <p className="text-gray-600 mb-1">This week</p>
+                    {weekLoading || weekHours === null ? (
+                      <div className="animate-pulse w-32 h-8 bg-gray-200 rounded mb-2" />
+                    ) : (
+                      <div className="text-2xl font-bold text-green-800 mb-2">
+                        {weekHours.toFixed(1)} / {weekTarget} hours
+                      </div>
+                    )}
+                    <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
+                      {weekLoading || weekHours === null ? (
+                        <div className="bg-gray-300 h-3 rounded-full animate-pulse" style={{ width: '100%' }} />
+                      ) : (
+                        <div
+                          className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min((weekHours / weekTarget) * 100, 100)}%` }}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>   
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
             </div>
           {/* Stat Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -402,11 +704,11 @@ const [profileImage, setProfileImage] = useState<string | null>(null);
                 className="relative"
                 onMouseEnter={() => {
                   setHoveredCardIndex(index);
-                  if (stat.subtitle.includes('Achievements')) triggerCelebration();
+                  if (typeof stat.subtitle === 'string' && stat.subtitle.includes('Achievements')) triggerCelebration();
                 }}
                 onMouseLeave={() => setHoveredCardIndex(null)}
               >
-                {stat.subtitle.includes('Achievements') && (
+                {typeof stat.subtitle === 'string' && stat.subtitle.includes('Achievements') && (
                   <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-[50%] pointer-events-none z-20">
                     <Confetti active={showConfetti} config={confettiConfig} />
                   </div>
@@ -482,52 +784,65 @@ const [profileImage, setProfileImage] = useState<string | null>(null);
 
                 {/* Holiday Calendar */}
                 <div className="bg-white rounded-xl shadow-lg p-6 flex flex-col justify-between min-h-[360px]">
+
                   <h2 className="text-xl font-bold text-green-700 mb-4 flex items-center gap-2">
                     <CalendarIcon className="w-5 h-5 text-green-600" />
                     Upcoming Holidays
                   </h2>
                   <div className="react-calendar-wrapper rounded-xl overflow-hidden">
-                        <div className="react-calendar-wrapper rounded-xl overflow-hidden relative min-h-[320px]">
-  {loading && (
-    <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
-      <span className="text-sm text-gray-600 font-medium">Loading...</span>
-    </div>
-  )}
+                    <div className="react-calendar-wrapper rounded-xl overflow-hidden relative min-h-[320px]">
+                      {loading && (
+                        <div className="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center z-10">
+                          <span className="text-sm text-gray-600 font-medium">Loading...</span>
+                        </div>
+                      )}
+                      <Calendar
+                        onActiveStartDateChange={({ activeStartDate }) => {
+                          const month = activeStartDate.getMonth() + 1;
+                          const year = activeStartDate.getFullYear();
+                          fetchHolidaysForMonth(month, year);
+                        }}
+                        tileClassName={({ date }) => {
+                          const current = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                          const today = new Date();
+                          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-  <Calendar
-    onActiveStartDateChange={({ activeStartDate }) => {
-      const month = activeStartDate.getMonth() + 1;
-      const year = activeStartDate.getFullYear();
-      fetchHolidaysForMonth(month, year);
-    }}
-    tileClassName={({ date }) => {
-      const current = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                          const isHoliday = holidayDates.includes(current);
+                          const isToday = current === todayStr;
 
-      const isHoliday = holidayDates.includes(current);
-      const isToday = current === todayStr;
+                          if (isToday && isHoliday) return 'bg-purple-700 text-white font-semibold rounded-md';
+                          if (isHoliday) return 'bg-green-700 text-white font-semibold rounded-md';
+                          if (isToday) return 'bg-blue-500 text-white font-semibold rounded-md';
 
-      if (isToday && isHoliday) return 'bg-purple-700 text-white font-semibold rounded-md';
-      if (isHoliday) return 'bg-green-700 text-white font-semibold rounded-md';
-      if (isToday) return 'bg-blue-500 text-white font-semibold rounded-md';
-
-      return '';
-    }}
-    className="w-full border-none"
-  />
-</div>
-
+                          return '';
+                        }}
+                        className="w-full border-none"
+                      />
+                    </div>
                   </div>
-                  <ul className="mt-4 text-sm text-gray-700 space-y-1">
-                  {upcomingHolidays.map((h, i) => (
-                  <li key={i}>
-                    <span className="font-semibold text-green-800">{h.holiday}</span>{' '}
-                    <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full ml-2">
-                      {h.type}
-                    </span>
-                  </li>
-                    ))}
+                  {/* Upcoming holidays list below the calendar */}
+                  <ul className="mt-4 text-sm text-gray-700 space-y-2">
+                    {[...upcomingHolidays]
+                      .sort((a, b) => {
+                        // Parse date strings in format dd/mm/yyyy
+                        const parse = (d) => {
+                          if (!d) return 0;
+                          const [dd, mm, yyyy] = d.split('/');
+                          return new Date(`${yyyy}-${mm}-${dd}`).getTime();
+                        };
+                        return parse(a.date) - parse(b.date);
+                      })
+                      .map((h, i) => (
+                        <li key={i} className="flex items-center justify-between bg-gray-50 rounded px-3 py-2 shadow-sm">
+                          <div>
+                            <span className="font-semibold text-green-800">{h.holiday}</span>
+                            <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full ml-2">{h.type}</span>
+                          </div>
+                          <span className="text-green-700 font-semibold text-sm">
+                            {h.date}
+                          </span>
+                        </li>
+                      ))}
                   </ul>
 
                 </div>
