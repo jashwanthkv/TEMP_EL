@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwiM7SKXbTc0EYAqDqUjRrwzJq8c2_8gYVd_tOi85TV1TRlqSxYI7x91YG4gHt65d5HWw/exec'; // Update this with your new deployment URL if it changes
 
@@ -53,36 +54,32 @@ const initialBalance = {
   compensation: { name: 'Compensation Leave', total: 0, used: 0 },
 };
 
-const HOLIDAYS_URL = 'https://script.google.com/macros/s/AKfycbzqbF6hOx0KmXNoN51DoE-aIhDoy70d7_rDzeacejz1i_4ES7Nmt9JdVE4DjWWkw3Og/exec';
+const HOLIDAYS_URL = 'https://script.google.com/macros/s/AKfycbxtN6eHCm3RiWjOmCPOavRNrBpzV0Bwc2wT8NAqE25NCROCt1WMMQTI7mSlT3iiGgdb/exec';
 
 const LeaveManagement = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   // State for public holidays
   const [publicHolidays, setPublicHolidays] = useState<{ date: string; name: string }[]>([]);
   const [holidaysLoading, setHolidaysLoading] = useState(false);
   // Fetch holidays for a given month and year
   const fetchHolidaysForMonth = (month: number, year: number) => {
-    setHolidaysLoading(true);
-    const dateString = `${year}-${String(month).padStart(2, '0')}-01`;
-    fetch(`${HOLIDAYS_URL}?action=getHolidays&date=${dateString}`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setPublicHolidays(data.map(h => ({
-            date: (() => {
-              // Convert dd/mm/yyyy to yyyy-mm-dd
-              if (h.date && h.date.includes('/')) {
-                const [dd, mm, yyyy] = h.date.split('/');
-                return `${yyyy}-${mm}-${dd}`;
-              }
-              return h.date;
-            })(),
-            name: h.holiday || h.name || '',
-          })));
-        }
-        setHolidaysLoading(false);
-      })
-      .catch(() => { setHolidaysLoading(false); });
-  };
+  setHolidaysLoading(true);
+  const dateString = `${year}-${String(month).padStart(2, '0')}`;
+  fetch(`${HOLIDAYS_URL}?action=getHolidays&date=${dateString}`)
+    .then(res => res.json())
+    .then(data => {
+      if (Array.isArray(data)) {
+        setPublicHolidays(data.map(h => ({
+          date: h.Date || h.date, // 'yyyy-mm-dd'
+          name: h.Title || h.title,
+        })));
+      }
+      setHolidaysLoading(false);
+    })
+    .catch(() => { setHolidaysLoading(false); });
+};
 
   // Initial fetch for current month
   useEffect(() => {
@@ -99,6 +96,8 @@ const LeaveManagement = () => {
   const [stepTwo, setStepTwo] = useState(false);
   const [dayType, setDayType] = useState<'Half Day' | 'Full Day' | ''>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
 
   // Data state
   const [history, setHistory] = useState<LeaveEntry[]>([]);
@@ -356,12 +355,14 @@ const LeaveManagement = () => {
   useEffect(() => {
     const initializePage = async () => {
       setBalanceLoading(true);
+      setLoading(true);
       // First check and apply any automatic leave updates (monthly/yearly)
       await checkAndApplyLeaveUpdates();
       // Then sync the balance to ensure accuracy
       await syncBalance();
       // Finally fetch the updated history
       await fetchHistory();
+      setLoading(false);
     };
     initializePage();
   }, []);
@@ -523,6 +524,17 @@ const LeaveManagement = () => {
     }
     return '';
   };
+
+  if (loading) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white space-y-4">
+      <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-gray-600 text-sm">Loading Leave Request...</p>
+    </div>
+  );
+}
+
+
 
   return (
     <div className="min-h-screen bg-gray-50">

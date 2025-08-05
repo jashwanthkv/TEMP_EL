@@ -20,65 +20,22 @@ type TicketType = {
   EmployeeID?: string; // NEW FIELD
 };
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxJ460fW7M-OyARIkITeyjG90BVh5V1sVzStndHW2posqFx8M6UjUBGmJKp4wg3ZtU1/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwaw9duy2olUB7Va4nlKbR1i8pO2cedHKhaeiO6ExfRFdZH5dwr-sjajgm5NDqzJv1qWw/exec';
 
-const mockTickets: TicketType[] = [
-  {
-    ID: "TKT-001",
-    Title: "Laptop not turning on",
-    Priority: "High",
-    Reason: "My work laptop suddenly stopped powering on.",
-    Status: "Pending",
-    Timestamp: "2023-05-15 09:23:45",
-    AssignedTo: "IT Support",
-    Comments: "Please check power adapter first"
-  },
-  {
-    ID: "TKT-002",
-    Title: "Software license renewal",
-    Priority: "Medium",
-    Reason: "Adobe Creative Cloud license expires next week.",
-    Status: "Approved",
-    Timestamp: "2023-05-14 14:10:22",
-    AssignedTo: "Finance Dept",
-    Comments: "Approved - budget allocated"
-  },
-  {
-    ID: "TKT-003",
-    Title: "Office chair repair",
-    Priority: "Low",
-    Reason: "Chair wheels are broken making it difficult to move around",
-    Status: "Rejected",
-    Timestamp: "2023-05-13 11:45:10",
-    AssignedTo: "Facilities",
-    Comments: "Not covered under warranty"
-  },
-  {
-    ID: "TKT-004",
-    Title: "VPN connection issues",
-    Priority: "High",
-    Reason: "Cannot connect to company VPN from home office",
-    Status: "Completed",
-    Timestamp: "2023-05-12 16:30:05",
-    AssignedTo: "IT Support",
-    Comments: "Issue resolved after client update"
-  }
-];
+
 
 const TicketManagement = () => {
   const navigate = useNavigate();
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [tickets, setTickets] = useState<TicketType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newTicket, setNewTicket] = useState({
-    title: '',
-    reason: '',
-    priority: 'Low',
-    status: 'Pending' as const,
-  });
   const [userRole, setUserRole] = useState<'employee' | 'admin'>('employee');
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const profileRef = React.useRef<HTMLDivElement>(null);
+
+  const toggleProfileDropdown = () => {
+    setShowProfileDropdown((prev) => !prev);
+  };
 
   useEffect(() => {
     const role = localStorage.getItem('userRole') as 'employee' | 'admin' || 'employee';
@@ -108,103 +65,101 @@ const TicketManagement = () => {
   }, [sheetId]);
 
   const fetchTickets = async () => {
-    setLoading(true);
-    try {
-      if (sheetId) {
-        const res = await fetch(`${SCRIPT_URL}?sheetId=${sheetId}&action=fetch`);
-        const data = await res.json();
-        if (data.success && Array.isArray(data.data)) {
-          const normalized = data.data.map((ticket: any) => ({
-            ID: ticket.ID || '-',
-            Title: ticket.TITLE || '-',
-            Priority: ticket.PRIORITY || '-',
-            Reason: ticket.REASON || '-',
-            Status: ticket.STATUS || 'Pending',
-            Timestamp: ticket.TIMESTAMP || '-',
-            AssignedTo: ticket.ASSIGNED_TO || '-',
-            Comments: ticket.COMMENTS || '-',
-          }));
-          setTickets(normalized.reverse());
-        } else {
-          console.warn('Empty response from API. Using mock data.');
-          setTickets([...mockTickets]);
-        }
-      } else {
-        console.log('No sheet ID — using mock data only.');
-        setTickets([...mockTickets]);
-      }
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setTickets([...mockTickets]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  setLoading(true);
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=getPending`);
+    if (!res.ok) throw new Error('Network response was not ok');
+    
+    const rawData = await res.json();
 
-  const handleSubmit = async () => {
-    const { title, reason, priority } = newTicket;
-    if (!title || !reason || !sheetId) {
-      alert('Please fill all fields.');
+    if (!Array.isArray(rawData)) {
+      console.error('Invalid ticket data format');
+      setTickets([]);
       return;
     }
 
-    const params = new URLSearchParams({
-      sheetId,
-      action: 'append',
-      title,
-      reason,
-      priority,
-      status: 'Pending', // Always start as Pending
+    // Define valid statuses as TypeScript literal types
+    const validStatuses = ['Pending', 'Approved', 'Rejected', 'Completed'] as const;
+
+    const allTickets: TicketType[] = rawData.map((ticket: any) => {
+      const rawStatus = (ticket.status || 'Pending').toLowerCase(); // fallback to 'Pending'
+      let status: TicketType['Status'] = 'Pending';
+
+      switch (rawStatus) {
+        case 'approved':
+          status = 'Approved';
+          break;
+        case 'rejected':
+          status = 'Rejected';
+          break;
+        case 'completed':
+          status = 'Completed';
+          break;
+        default:
+          status = 'Pending';
+      }
+
+      return {
+        ID: String(ticket.id ?? ''),
+        Title: String(ticket.title ?? ''),
+        Priority: String(ticket.priority ?? 'Low'),
+        Reason: String(ticket.reason ?? ''),
+        Timestamp: String(ticket.timestamp ?? ''),
+        Status: status,
+        EmployeeID: String(ticket.employeeId ?? ''),
+      };
     });
 
-    try {
-      const res = await fetch(`${SCRIPT_URL}?${params.toString()}`);
-      const data = await res.json();
-      if (data.success) {
-        alert('Ticket submitted!');
-        setNewTicket({
-          title: '',
-          reason: '',
-          priority: 'Low',
-          status: 'Pending',
-        });
-        fetchTickets();
-      } else {
-        alert('Submission failed: ' + data.message);
-      }
-    } catch (err) {
-      console.error('Error submitting ticket:', err);
+    const sortedTickets = allTickets.sort(
+      (a, b) => new Date(b.Timestamp).getTime() - new Date(a.Timestamp).getTime()
+    );
+
+    setTickets(sortedTickets);
+  } catch (err) {
+    console.error('Fetch error:', err);
+    setTickets([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  const handleStatusUpdate = async (
+  ticketId: string,
+  newStatus: TicketType['Status'],
+  employeeId?: string
+) => {
+  if (!ticketId) return;
+
+  try {
+    const params = new URLSearchParams({ ticketId });
+    let action = '';
+
+    if (newStatus === 'Approved' || newStatus === 'Rejected') {
+      if (!employeeId) return;
+      params.append('employeeId', employeeId);
+      action = newStatus === 'Approved' ? 'approve' : 'reject';
+    } else if (newStatus === 'Completed') {
+      action = 'complete';
+    } else {
+      return;
     }
-  };
 
-  const handleStatusUpdate = async (ticketId: string, newStatus: TicketType['Status'], comments = '') => {
-    if (!sheetId) return;
+    const res = await fetch(`${SCRIPT_URL}?action=${action}&${params.toString()}`);
+    if (!res.ok) throw new Error(`HTTP error! Status: ${res.status}`);
 
-    try {
-      const params = new URLSearchParams({
-        sheetId,
-        action: 'update',
-        id: ticketId,
-        status: newStatus,
-        comments,
-      });
+    const text = await res.text();
+    if (text === 'Missing parameters') throw new Error('Missing required parameters');
 
-      const res = await fetch(`${SCRIPT_URL}?${params.toString()}`);
-      const data = await res.json();
-      if (data.success) {
-        alert(`Ticket marked as ${newStatus}!`);
-        fetchTickets();
-      } else {
-        alert('Update failed: ' + data.message);
-      }
-    } catch (err) {
-      console.error('Error updating ticket:', err);
-    }
-  };
+    console.log(`✅ Ticket ${ticketId} marked as ${newStatus}`);
 
-  const toggleProfileDropdown = () => {
-    setShowProfileDropdown(!showProfileDropdown);
-  };
+    await fetchTickets(); // Refresh updated data
+  } catch (err) {
+    console.error('❌ Status update failed:', err);
+  }
+};
+
+
 
   const Header = () => (
     <header className="w-full bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
@@ -275,40 +230,7 @@ const TicketManagement = () => {
       
       <div className="flex-1 p-6 flex flex-col items-center">
         <div className="w-full max-w-6xl grid gap-10">
-          {/* New Ticket Form - Only for employees */}
-          {userRole === 'employee' && (
-            <div className="bg-white w-full p-6 rounded-xl shadow space-y-4">
-              <h2 className="text-lg font-bold text-gray-800">Raise a New Ticket</h2>
-              <Input
-                placeholder="Issue Title"
-                value={newTicket.title}
-                onChange={(e) => setNewTicket({ ...newTicket, title: e.target.value })}
-              />
-              <Textarea
-                placeholder="Describe your issue..."
-                value={newTicket.reason}
-                onChange={(e) => setNewTicket({ ...newTicket, reason: e.target.value })}
-              />
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="text-sm">Priority:</label>
-                <select
-                  value={newTicket.priority}
-                  onChange={(e) => setNewTicket({ ...newTicket, priority: e.target.value })}
-                  className="border rounded-lg px-3 py-2 text-sm"
-                >
-                  <option>Low</option>
-                  <option>Medium</option>
-                  <option>High</option>
-                </select>
-              </div>
-              <Button
-                onClick={handleSubmit}
-                className="bg-blue-600 text-white hover:bg-blue-700 rounded-full"
-              >
-                Submit Ticket
-              </Button>
-            </div>
-          )}
+          
 
           {/* Ticket List */}
           {/* 1️⃣ Pending Tickets Table (No Status Column) */}
@@ -336,17 +258,18 @@ const TicketManagement = () => {
           <td className="p-4">{ticket.Timestamp}</td>
           <td className="p-4 flex gap-2">
             <Button
-              onClick={() => handleStatusUpdate(ticket.ID, 'Approved')}
+              onClick={() => handleStatusUpdate(ticket.ID, 'Approved', ticket.EmployeeID)}
               className="bg-blue-600 text-white text-xs px-3 py-1"
             >
               Approve
             </Button>
             <Button
-              onClick={() => handleStatusUpdate(ticket.ID, 'Rejected')}
+              onClick={() => handleStatusUpdate(ticket.ID, 'Rejected', ticket.EmployeeID)}
               className="bg-red-600 text-white text-xs px-3 py-1"
             >
               Reject
             </Button>
+
           </td>
         </tr>
       ))}
@@ -387,6 +310,7 @@ const TicketManagement = () => {
             >
               Completed
             </Button>
+
           </td>
         </tr>
       ))}

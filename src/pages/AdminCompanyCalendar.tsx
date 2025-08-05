@@ -1,3 +1,22 @@
+export function jsonpRequest(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const callbackName = "jsonp_callback_" + Math.round(100000 * Math.random());
+    (window as any)[callbackName] = (data: any) => {
+      resolve(data);
+      delete (window as any)[callbackName];
+      document.body.removeChild(script);
+    };
+    const script = document.createElement("script");
+    script.src = url + (url.includes("?") ? "&" : "?") + "callback=" + callbackName;
+    script.onerror = () => {
+      reject(new Error("JSONP request failed"));
+      delete (window as any)[callbackName];
+      document.body.removeChild(script);
+    };
+    document.body.appendChild(script);
+  });
+}
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   format,
@@ -13,14 +32,15 @@ import { Home, Bell, User, UserCircle, Pencil, Trash2, PlusCircle } from 'lucide
 import { useNavigate } from 'react-router-dom';
 
 interface Event {
+  eventId?: number; 
   Title: string;
   Date: string; // Format: 'dd/MM/yyyy'
   Description: string;
   StartTime: string; // Format: 'HH:mm'
-  EndTime: string;   // Format: 'HH:mm'
 }
-const BACK_URL="https://script.google.com/macros/s/AKfycbxg9PC7Mp0bFu_aJ3iT9TclwPuuMq_ShXy-5-RsoL52jXy38R2m2V_7PJKkloBhZ4iY/exec";
-const back="https://script.google.com/macros/s/AKfycbwoLodscz8lOp0VBX0KcIz0oCAIgM9rgo9Ursefn9FnzB83fC7k1FL5WL7z0lSPLk2DBQ/exec";
+
+const BACK_URL="https://script.google.com/macros/s/AKfycby4mIl3BeOq_YW0E5Q_eSMCvZkKl0VWHnGBkD524zyN0BS-F9NnqeNdShxbgJtez9tjvw/exec";
+const back="https://script.google.com/macros/s/AKfycbwwzbb80PQYMI_Ub_3AUWRx9K9WP94wpySZWUFzv6XD7UefJxAoHDvd-Mv346HWUSgfkg/exec";
 const CompanyCalendar: React.FC = () => {
   const navigate = useNavigate();
   const today = new Date();
@@ -30,7 +50,7 @@ const CompanyCalendar: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newEvent, setNewEvent] = useState<Partial<Event>>({});
   const [isEditing, setIsEditing] = useState(false);
-  const [editIndex, setEditIndex] = useState<number | null>(null);
+  
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
@@ -68,23 +88,31 @@ const CompanyCalendar: React.FC = () => {
   };
 
   useEffect(() => {
-    const fetchEvents = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`${BACK_URL}?action=upcoming`);
-        const data = await res.json();
-        setEvents(data.events || []);
-      } catch (err) {
-        console.error('Failed to load events:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${BACK_URL}?action=upcoming`);
+      const data = await res.json();
+      console.log("Fetched events:", data.events);
 
-    fetchEvents();
-    window.addEventListener('focus', fetchEvents);
-    return () => window.removeEventListener('focus', fetchEvents);
-  }, []);
+      const mappedEvents = (data.events || []).map((ev: any) => ({
+        ...ev,
+        StartTime: ev.Time, // ✅ Required remapping for frontend compatibility
+      }));
+
+      setEvents(mappedEvents);
+    } catch (err) {
+      console.error('Failed to load events:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchEvents();
+  window.addEventListener('focus', fetchEvents);
+  return () => window.removeEventListener('focus', fetchEvents);
+}, []);
+
 
   const getBoxsColor = (count: number) => {
     if (count === 0) return 'bg-white';
@@ -115,45 +143,50 @@ const CompanyCalendar: React.FC = () => {
     !newEvent.Title ||
     !newEvent.Date ||
     !newEvent.Description ||
-    !newEvent.StartTime ||
-    !newEvent.EndTime
+    !newEvent.StartTime
   ) {
     alert("All fields are required.");
     return;
   }
 
   try {
-    const formData = new URLSearchParams();
-    formData.append("action", "addEvent");
-    formData.append("title", newEvent.Title.trim());
-    formData.append("date", newEvent.Date.trim()); // Should be in DD/MM/YYYY format
-    formData.append("start", newEvent.StartTime.trim());
-    formData.append("end", newEvent.EndTime.trim());
-    formData.append("description", newEvent.Description.trim());
+    const params = new URLSearchParams();
+    params.append("action", isEditing ? "editEvent" : "addEvent");
+    params.append("title", newEvent.Title.trim());
+    params.append("date", newEvent.Date.trim());
+    params.append("start", newEvent.StartTime.trim());
+    params.append("description", newEvent.Description.trim());
 
-    const response = await fetch(
-      "https://script.google.com/macros/s/AKfycbwoLodscz8lOp0VBX0KcIz0oCAIgM9rgo9Ursefn9FnzB83fC7k1FL5WL7z0lSPLk2DBQ/exec",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: formData.toString(),
-      }
-    );
+    if (isEditing && newEvent.eventId) {
+      params.append("eventId", newEvent.eventId.toString());
+    }
 
-    const result = await response.json();
+    const url = `https://script.google.com/macros/s/AKfycbwwzbb80PQYMI_Ub_3AUWRx9K9WP94wpySZWUFzv6XD7UefJxAoHDvd-Mv346HWUSgfkg/exec?${params.toString()}`;
+
+    const result = await jsonpRequest(url);
     console.log(result);
 
     if (result.status === "success") {
-      alert("Event added successfully!");
-      setEvents([...events, newEvent as Event]);
+      const createdEvent: Event = {
+        ...(newEvent as Event),
+        eventId: result.eventId ?? newEvent.eventId,
+      };
+
+      if (isEditing && createdEvent.eventId) {
+        const updated = events.map(ev =>
+          ev.eventId === createdEvent.eventId ? createdEvent : ev
+        );
+        setEvents(updated);
+      }
+      else {
+        setEvents([...events, createdEvent]);
+      }
+
       setShowAddForm(false);
       setNewEvent({});
       setIsEditing(false);
-      setEditIndex(null);
     } else {
-      alert("Failed to add event: " + result.message);
+      alert("Error: " + result.message);
     }
   } catch (err) {
     console.error("Error adding event:", err);
@@ -163,18 +196,43 @@ const CompanyCalendar: React.FC = () => {
 
 
 
-  const handleDeleteEvent = (index: number) => {
-    const filtered = getEventsForDate(selectedDate!);
-    const target = filtered[index];
-    setEvents(events.filter(e => !(e.Date === target.Date && e.Title === target.Title)));
-  };
 
-  const handleEditEvent = (event: Event, index: number) => {
-    setNewEvent(event);
-    setEditIndex(index);
-    setIsEditing(true);
-    setShowAddForm(true);
-  };
+  const handleDeleteEvent = async (target: Event) => {
+  if (!target.eventId) {
+    alert("Missing eventId for deletion.");
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append("action", "deleteEvent");
+    params.append("eventId", target.eventId.toString());
+
+    const url = `https://script.google.com/macros/s/AKfycbwwzbb80PQYMI_Ub_3AUWRx9K9WP94wpySZWUFzv6XD7UefJxAoHDvd-Mv346HWUSgfkg/exec?${params.toString()}`;
+
+    const result = await jsonpRequest(url);
+
+    if (result.status === "success") {
+      alert("Event deleted.");
+      setEvents(events.filter((e) => e.eventId !== target.eventId));
+    } else {
+      alert("Failed to delete: " + result.message);
+    }
+  } catch (err) {
+    console.error("Delete failed", err);
+    alert("Delete failed.");
+  }
+};
+
+
+
+
+  const handleEditEvent = (event: Event) => {
+  setNewEvent(event);
+  setIsEditing(true);
+  setShowAddForm(true);
+};
+
 
   const days: Date[] = [];
   const start = startOfWeek(startOfMonth(today), { weekStartsOn: 1 });
@@ -248,7 +306,14 @@ const CompanyCalendar: React.FC = () => {
             </header>
 
       {/* Calendar View */}
-      <main className="max-w-[1400px] mx-auto px-4 pt-4 pb-0 flex flex-row gap-4 h-[calc(100vh-80px)] overflow-hidden">
+      <main className="max-w-[1400px] mx-auto px-4 pt-4 pb-0 flex flex-row gap-4 h-[calc(100vh-80px)] overflow-hidden relative">
+        {/* ✅ Loading Overlay for Body Only (excludes header) */}
+        {loading && (
+          <div className="absolute inset-0 bg-white bg-opacity-60 z-40 flex items-center justify-center">
+            <div className="w-12 h-12 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
   {/* Upcoming Events - Left */}
   <div className="bg-white rounded-xl shadow p-4 w-[300px] h-full overflow-y-auto">
     <h2 className="text-base font-bold text-green-700 mb-2">Upcoming Events</h2>
@@ -262,7 +327,7 @@ const CompanyCalendar: React.FC = () => {
           .map((ev, idx) => (
             <li key={idx} className="bg-green-50 p-2 rounded-md shadow-sm text-sm">
               <p className="font-semibold text-green-800">{ev.Title}</p>
-              <p className="text-xs text-gray-600">{ev.Date} • {ev.StartTime} - {ev.EndTime}</p>
+              <p className="text-xs text-gray-600">{ev.Date}</p>
             </li>
           ))}
       </ul>
@@ -323,21 +388,49 @@ const CompanyCalendar: React.FC = () => {
                     <div>
                       <p className="font-bold text-green-800">{ev.Title}</p>
                       <p className="text-sm text-gray-600">{ev.Description}</p>
-                      <p className="text-xs text-gray-500">{ev.StartTime} - {ev.EndTime}</p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        🕒 {(() => {
+  const raw = ev.StartTime?.toString();
+
+  // Case 1: Legacy Date string like "Sat Dec 30 1899 13:00:00 GMT+0521 ..."
+  if (raw?.includes("1899")) {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return format(d, 'hh:mm a');  // ✅ formatted
+    }
+  }
+
+  // Case 2: "13:00" format
+  const [h, m] = raw?.split(':') || [];
+  if (h && m) {
+    const parsed = parse(`${h}:${m}`, 'HH:mm', new Date());
+    return !isNaN(parsed.getTime()) ? format(parsed, 'hh:mm a') : 'No Time';
+  }
+
+  return 'No Time';
+})()}
+
+
+                      </p>
+
+
+
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => handleEditEvent(ev, i)} className="text-blue-600 hover:text-blue-800"><Pencil size={16} /></button>
-                      <button onClick={() => handleDeleteEvent(i)} className="text-red-600 hover:text-red-800"><Trash2 size={16} /></button>
+                      <button onClick={() => handleEditEvent(ev)} className="text-blue-600 hover:text-blue-800"><Pencil size={16} /></button>
+                      <button onClick={() => handleDeleteEvent(ev)} className="text-red-600 hover:text-red-800"><Trash2 size={16} /></button>
                     </div>
                   </li>
                 ))}
               </ul>
+
             ) : (
               <p className="text-gray-500">No events scheduled for this date.</p>
             )}
           </div>
         </div>
       )}
+
 
       {/* Add/Edit Form */}
       {showAddForm && (
@@ -374,19 +467,29 @@ const CompanyCalendar: React.FC = () => {
               className="w-full mb-3 px-3 py-2 border rounded"
             />
             <input
-              type="time"
-              value={newEvent.StartTime || ''}
-              onChange={(e) => setNewEvent({ ...newEvent, StartTime: e.target.value })}
-              className="w-full mb-3 px-3 py-2 border rounded"
-              required
-            />
-            <input
-              type="time"
-              value={newEvent.EndTime || ''}
-              onChange={(e) => setNewEvent({ ...newEvent, EndTime: e.target.value })}
-              className="w-full mb-4 px-3 py-2 border rounded"
-              required
-            />
+  type="time"
+  value={(() => {
+    const raw = newEvent.StartTime?.toString() || '';
+    if (raw.includes('1899')) {
+      const d = new Date(raw);
+      if (!isNaN(d.getTime())) {
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
+    }
+    // If it's already in HH:mm, return directly
+    if (/^\d{1,2}:\d{2}$/.test(raw)) return raw;
+    return '';
+  })()}
+  onChange={(e) =>
+    setNewEvent({ ...newEvent, StartTime: e.target.value })
+  }
+  className="w-full mb-3 px-3 py-2 border rounded"
+  required
+/>
+
+            
             <div className="flex justify-end gap-2">
               <button onClick={() => { setShowAddForm(false); setNewEvent({}); setIsEditing(false); }} className="px-4 py-2 text-sm rounded border">Cancel</button>
               <button onClick={handleAddOrEditEvent} className="px-4 py-2 text-sm bg-green-600 text-white rounded">{isEditing ? 'Update' : 'Add'}</button>

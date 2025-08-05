@@ -20,6 +20,8 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { UserCircle } from 'lucide-react'; 
 import { Bell } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -31,6 +33,9 @@ type SidebarItem = {
 };
 
 const Dashboard = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   // State for monthly hours
   const [monthHours, setMonthHours] = useState<number | null>(null);
   const [monthTarget, setMonthTarget] = useState(192); // Default: 48*4
@@ -48,6 +53,7 @@ const Dashboard = () => {
   const [pendingLeaveCount, setPendingLeaveCount] = useState<number | null>(null);
   const [pendingDocCount, setPendingDocCount] = useState<number | null>(null);
   const [pendingLoading, setPendingLoading] = useState(true);
+  const { logout } = useAuth();
 
   // Apps Script URLs for leave and document requests
   const LEAVE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwiM7SKXbTc0EYAqDqUjRrwzJq8c2_8gYVd_tOi85TV1TRlqSxYI7x91YG4gHt65d5HWw/exec';
@@ -293,20 +299,41 @@ const Dashboard = () => {
 }, []);
 
   const [newsData, setNewsData] = useState<NewsItem[]>([]);
-  useEffect(() => {
+useEffect(() => {
   fetch(
-    'https://script.google.com/macros/s/AKfycbzO3pTy2RQCzh5DFNVm83wpSYkyHf9t4dsA25ibY72-nrUxcBy6SQafJvqejicFvZCj/exec?action=getNews'
+    'https://script.google.com/macros/s/AKfycbxdBeibvOx5xqJ4v6hCITckMdMGWefPCpta6sHL0lcySJMnlI0ycTX2vD8_5-fKST47/exec?action=getNews'
   )
     .then((res) => res.json())
-    .then((data) => {
-      const formatted = data.map((item: any) => ({
-        ...item,
-        fullText: `${item.description}\n\nClick to read more...`,
-      }));
-      setNewsData(formatted);
+    .then(async (data) => {
+      // For each news item, fetch the base64 image
+      const updated = await Promise.all(
+        data.map(async (item) => {
+          if (item.imageId) {
+            const res = await fetch(
+              `https://script.google.com/macros/s/AKfycbxdBeibvOx5xqJ4v6hCITckMdMGWefPCpta6sHL0lcySJMnlI0ycTX2vD8_5-fKST47/exec?action=getImage&id=${item.imageId}`
+            );
+            const base64 = await res.text();
+            return {
+              ...item,
+              image: `data:image/png;base64,${base64}`, // 👈 Embed image as base64
+              fullText: `${item.description}\n\nClick to read more...`,
+            };
+          } else {
+            return {
+              ...item,
+              image: '', // No image available
+              fullText: `${item.description}\n\nClick to read more...`,
+            };
+          }
+        })
+      );
+
+      setNewsData(updated);
     })
     .catch((err) => console.error('Failed to fetch news:', err));
 }, []);
+
+
 
 
   // Format join date if it's in a different format
@@ -334,7 +361,17 @@ const Dashboard = () => {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleLogout = () => {
+    console.log('Logout initiated...');
+    console.log('localStorage before clear:', { ...localStorage });
+    
+    // Clear localStorage
     localStorage.clear();
+    console.log('localStorage after clear:', { ...localStorage });
+    
+    // Call AuthContext logout
+    logout();
+    
+    // Navigate to login page
     navigate('/');
   };
 
@@ -407,7 +444,6 @@ const Dashboard = () => {
           color: 'text-red-600',
         },
   ];
-
   const sidebarItems: SidebarItem[] = [
     { title: 'Timesheet', icon: Clock, path: '/timesheet' },
     { title: 'Leave Request', icon: CalendarIcon, path: '/leave' },
@@ -415,8 +451,7 @@ const Dashboard = () => {
     { title: 'Document Request', icon: Lock, path: '/requests' },
     { title: 'Training & Courses', icon: Book, path: '/training' },
     { title: 'Company Achievements', icon: BarChart2, path: '/company' },
-    { title: 'Help & Support', icon: HelpCircle, path: '/help' },
-
+    { title: 'Help & Support', icon: HelpCircle, path: '/help' }
   ];
   type NewsItem = {
   title: string;
@@ -424,8 +459,6 @@ const Dashboard = () => {
   image: string;
   fullText: string;
 };
-
-
   const confettiConfig = {
     angle: 60,
     spread: 100,
@@ -438,7 +471,6 @@ const Dashboard = () => {
     height: '8px',
     colors: ['#00C9A7', '#FFD93D', '#FF6B6B', '#6A67CE'],
   };
-
   const triggerCelebration = () => {
     setShowConfetti(true);
     setShowPopup(true);
@@ -448,19 +480,13 @@ const Dashboard = () => {
       setShowPopup(false);
     }, 2000);
   };
-
-  
-  
-
   const leaveSummaryString = localStorage.getItem('leaveSummary');
   const leaveSummary = leaveSummaryString ? JSON.parse(leaveSummaryString) : null;
-
   const leaveLabels = ['Casual Leave', 'Sick Leave', 'Earned Leave'];
   const leaveValues = leaveSummary ? [leaveSummary.casual || 0, leaveSummary.sick || 0, leaveSummary.earned || 0] : [10, 3, 3];
   const totalLeaveDays = leaveValues.reduce((sum, val) => sum + val, 0);
   const leaveColors = ['#3B82F6', '#EF4444', '#10B981'];
   const [showTimeTracker, setShowTimeTracker] = useState(false);
-
   const leavePieData = {
     labels: leaveLabels,
     datasets: [
@@ -473,7 +499,6 @@ const Dashboard = () => {
       },
     ],
   };
-
   const leavePieOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -481,61 +506,47 @@ const Dashboard = () => {
       legend: { position: 'bottom' as const },
     },
   };
-
   const [upcomingHolidays, setUpcomingHolidays] = useState([]);
   const [holidayDates, setHolidayDates] = useState([]);
   const [loading, setLoading] = useState(false);
   const holidayCache = {};
   const fetchHolidaysForMonth = async (month, year) => {
   const cacheKey = `${year}-${String(month).padStart(2, '0')}`;
-
-  // If data is cached, use it directly
   if (holidayCache[cacheKey]) {
     setUpcomingHolidays(holidayCache[cacheKey].upcomingHolidays);
     setHolidayDates(holidayCache[cacheKey].holidayDates);
     return;
   }
-
   setLoading(true);
   try {
-    const dateString = `${year}-${String(month).padStart(2, '0')}-01`;
+    const dateString = `${year}-${String(month).padStart(2, '0')}`;
     const response = await fetch(
-      `https://script.google.com/macros/s/AKfycbzqbF6hOx0KmXNoN51DoE-aIhDoy70d7_rDzeacejz1i_4ES7Nmt9JdVE4DjWWkw3Og/exec?action=getHolidays&date=${dateString}`
+      `https://script.google.com/macros/s/AKfycbxtN6eHCm3RiWjOmCPOavRNrBpzV0Bwc2wT8NAqE25NCROCt1WMMQTI7mSlT3iiGgdb/exec?action=getHolidays&date=${dateString}`
     );
     const data = await response.json();
-
-    const dateStrings = data.map(h => {
-      const [dd, mm, yyyy] = h.date.split('/');
-      return `${yyyy}-${mm}-${dd}`;
-    });
-
-    // Set to state
-    setUpcomingHolidays(data);
-    setHolidayDates(dateStrings);
-
-    // Store in cache
+    // Map backend data to expected frontend format
+    const mapped = data.map(h => ({
+      date: h.Date || h.date, // 'yyyy-mm-dd'
+      holiday: h.Title || h.title, // holiday name
+      type: h.type || '', // optional
+    }));
+    setUpcomingHolidays(mapped);
+    setHolidayDates(mapped.map(h => h.date));
     holidayCache[cacheKey] = {
-      upcomingHolidays: data,
-      holidayDates: dateStrings,
+      upcomingHolidays: mapped,
+      holidayDates: mapped.map(h => h.date),
     };
-
   } catch (error) {
     console.error("Failed to fetch holidays", error);
   } finally {
     setLoading(false);
   }
 };
-
-
-
 // Fetch current month on mount
 useEffect(() => {
   const today = new Date();
   fetchHolidaysForMonth(today.getMonth() + 1, today.getFullYear());
-
 }, []);
-
-
 const scriptUrl = 'https://script.google.com/macros/s/AKfycbz0b9c2rTYUGRSyVbbsXVcnenIFOIbsuQY2JrvP_Ar65QW1fIJcv61Y39aXA-VOing0dg/exec';
 const [profileImage, setProfileImage] = useState<string | null>(null);
 const [profileLoading, setProfileLoading] = useState(true);
@@ -585,15 +596,14 @@ const [profileLoading, setProfileLoading] = useState(true);
 
       {/* Logout */}
       <button
-        onClick={() => {
-          localStorage.clear();
-          navigate('/');
-        }}
-        className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2"
-      >
-        <LogOut className="w-4 h-4" />
-        Logout
-      </button>
+      onClick={() => {
+        handleLogout();
+      }}
+      className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2"
+    >
+      <LogOut className="w-4 h-4" />
+      Logout
+    </button>
     </div>
   )}
 </div>
@@ -630,20 +640,21 @@ const [profileLoading, setProfileLoading] = useState(true);
       {/* Fixed News Ticker - Right to Left Animation */}
           {/* This goes directly inside your dashboard main layout, just below the top nav */}
           <div className="w-full bg-transparent px-0 -mt-2 mb-2">
-            <div className="overflow-hidden w-full">
-              <div className="flex animate-scroll-left items-center space-x-6 pl-4 pr-6">
-                {newsData.map((item, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => setSelectedNews(item)}
-                    className="min-w-[300px] bg-gradient-to-r from-[#32d399] via-[#16a085] to-[#0e7662] text-white font-semibold text-base px-6 py-3 rounded-lg shadow-md cursor-pointer hover:brightness-110 transition whitespace-nowrap"
-                  >
-                    {item.title}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+  <div className="overflow-hidden w-full">
+    <div className="flex animate-scroll-left items-center space-x-6 pl-4 pr-6">
+      {newsData.map((item, idx) => (
+        <div
+          key={idx}
+          onClick={() => setSelectedNews(item)}
+          className="min-w-[300px] bg-gradient-to-r from-[#32d399] via-[#16a085] to-[#0e7662] text-white font-semibold text-base px-6 py-3 rounded-lg shadow-md cursor-pointer hover:brightness-110 transition whitespace-nowrap"
+        >
+          {item.title}
+        </div>
+      ))}
+    </div>
+  </div>
+</div>
+
           {/* Welcome and Working Time */}
           <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Updated Welcome Card */}
@@ -850,43 +861,55 @@ const [profileLoading, setProfileLoading] = useState(true);
        
       {/* News Modal */}
           {selectedNews && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4 py-8 overflow-auto">
-              <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-4xl p-8 relative">
-                <h2 className="text-3xl font-bold text-green-800 mb-4">
-                  {selectedNews.title}
-                </h2>
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4 py-8 overflow-auto">
+    <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-4xl p-8 relative">
+      <h2 className="text-3xl font-bold text-green-800 mb-4">
+        {selectedNews.title}
+      </h2>
 
-                {selectedNews.image && (
-      selectedNews.image.includes('drive.google.com') ||
-      /\.(pdf)$/i.test(selectedNews.image) ? (
-        <iframe
-          src={selectedNews.image}
-          title="PDF Preview"
-          className="w-full h-96 mb-6 rounded shadow"
-        />
+      {selectedNews.image ? (
+        <>
+          <a
+            href={selectedNews.image}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block mb-4 text-blue-600 underline text-sm"
+          >
+            View Image in New Tab
+          </a>
+          <img
+            src={selectedNews.image}
+
+            alt="News"
+            className="rounded-xl w-full h-64 object-cover mb-6 shadow"
+            onError={(e) => {
+              // Hide broken images
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </>
       ) : (
-        <img
-          src={selectedNews.image}
-          alt="News"
-          className="rounded-xl w-full h-64 object-cover mb-6 shadow"
-        />
-      )
-    )}
-                <p className="text-gray-800 text-lg leading-relaxed mb-8 whitespace-pre-line">
-                  {selectedNews.fullText}
-                </p>
+        <p className="text-gray-500 italic mb-4">No image preview available.</p>
+      )}
 
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => setSelectedNews(null)}
-                    className="bg-green-100 text-green-800 px-6 py-2 rounded hover:bg-green-200 transition text-base font-semibold"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+      <p className="text-gray-800 text-lg leading-relaxed mb-8 whitespace-pre-line">
+        {selectedNews.fullText}
+      </p>
+
+      <div className="flex justify-end">
+        <button
+          onClick={() => setSelectedNews(null)}
+          className="bg-green-100 text-green-800 px-6 py-2 rounded hover:bg-green-200 transition text-base font-semibold"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+
            
         </main>
       </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Home, Upload, User } from 'lucide-react';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 interface ProfileData {
   EMP_ID: number;
@@ -43,6 +44,9 @@ const Field = ({ label, value }: { label: string; value: string | number }) => (
 const scriptUrl = 'https://script.google.com/macros/s/AKfycbz0b9c2rTYUGRSyVbbsXVcnenIFOIbsuQY2JrvP_Ar65QW1fIJcv61Y39aXA-VOing0dg/exec';
 
 const Profile = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -122,7 +126,15 @@ const Profile = () => {
   };
 
 
-  if (!profile) return <div className="p-6 text-center">Loading profile...</div>;
+  if (!profile) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white space-y-4">
+      <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-gray-600 text-sm">Loading profile...</p>
+    </div>
+  );
+}
+
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">

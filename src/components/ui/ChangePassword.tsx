@@ -1,133 +1,199 @@
 import React, { useState } from 'react';
-import styles from './ChangePassword.module.css';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-const ChangePassword: React.FC = () => {
-  const [role, setRole] = useState<'admin' | 'employee'>('admin');
-  const [employeeId, setEmployeeId] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+const ChangePassword = () => {
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isChanging, setIsChanging] = useState(false);
+  const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [formData, setFormData] = useState({
+    employeeId: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+
+  const handleChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const validatePassword = (password: string) => {
+    const requirements = [
+      { test: password.length >= 8, text: 'At least 8 characters' },
+      { test: /[A-Z]/.test(password), text: 'One uppercase letter' },
+      { test: /[a-z]/.test(password), text: 'One lowercase letter' },
+      { test: /\d/.test(password), text: 'One number' },
+      { test: /[!@#$%^&*]/.test(password), text: 'One special character' },
+    ];
+    return requirements;
+  };
+
+  const requirements = validatePassword(formData.newPassword);
+  const isValidPassword = requirements.every(req => req.test);
+  const passwordsMatch = formData.newPassword === formData.confirmPassword;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (role === 'employee' && employeeId.trim() === '') {
-      alert('Please enter Employee ID.');
+    if (!formData.employeeId) {
+      toast({
+        title: 'Missing Employee ID',
+        description: 'Please enter an employee ID.',
+        variant: 'destructive',
+      });
       return;
     }
 
-    if (role === 'admin' && adminEmail.trim() === '') {
-      alert('Please enter Admin Email.');
+    if (!isValidPassword) {
+      toast({
+        title: 'Invalid Password',
+        description: 'Please ensure your password meets all requirements.',
+        variant: 'destructive',
+      });
       return;
     }
 
-    if (newPassword !== confirmPassword) {
-      alert('New passwords do not match.');
+    if (!passwordsMatch) {
+      toast({
+        title: "Passwords Don't Match",
+        description: 'New password and confirmation must match.',
+        variant: 'destructive',
+      });
       return;
     }
 
-    // Simulated password change logic
-    if (role === 'admin') {
-      console.log(`Admin password changed for ${adminEmail}`);
-    } else {
-      console.log(`Password changed for Employee ID: ${employeeId}`);
+    setIsChanging(true);
+    try {
+      // TODO: Replace with API call to update password by employeeId
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      toast({
+        title: 'Password Changed',
+        description: 'Password updated successfully for the employee.',
+      });
+      setFormData({ employeeId: '', newPassword: '', confirmPassword: '' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update password. Try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsChanging(false);
     }
-
-    setSuccessMessage(
-      `${role === 'admin' ? `Admin (${adminEmail})` : `Employee (${employeeId})`} password updated successfully.`
-    );
-
-    // Clear form
-    setEmployeeId('');
-    setAdminEmail('');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
   };
 
   return (
-    <div className={styles.container}>
-      <h2 className={styles.title}>Change Password</h2>
-
-      <div className={styles.toggle}>
-        <button
-          type="button"
-          className={`${styles.toggleBtn} ${role === 'admin' ? styles.active : ''}`}
-          onClick={() => setRole('admin')}
-        >
-          Admin
-        </button>
-        <button
-          type="button"
-          className={`${styles.toggleBtn} ${role === 'employee' ? styles.active : ''}`}
-          onClick={() => setRole('employee')}
-        >
-          Employee
-        </button>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-card-foreground">Change Employee Password</h2>
+        <p className="text-muted-foreground mt-1">Update password using employee ID</p>
       </div>
 
-      <form onSubmit={handleSubmit} className={styles.form}>
-        {role === 'employee' && (
-          <label>
-            Employee ID
-            <input
-              type="text"
-              value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              required
-            />
-          </label>
-        )}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5 text-brand" />
+              Password Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Employee ID */}
+            <div className="space-y-2">
+              <Label htmlFor="employeeId">Employee ID</Label>
+              <Input
+                id="employeeId"
+                value={formData.employeeId}
+                onChange={(e) => handleChange('employeeId', e.target.value)}
+                required
+              />
+            </div>
 
-        {role === 'admin' && (
-          <label>
-            Admin Email
-            <input
-              type="email"
-              value={adminEmail}
-              onChange={(e) => setAdminEmail(e.target.value)}
-              required
-            />
-          </label>
-        )}
+            {/* New Password */}
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password</Label>
+              <div className="relative">
+                <Input
+                  id="newPassword"
+                  type={showNewPassword ? 'text' : 'password'}
+                  value={formData.newPassword}
+                  onChange={(e) => handleChange('newPassword', e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                >
+                  {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
 
-        <label>
-          Current Password
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            required
-          />
-        </label>
+              {/* Password Requirements */}
+              {formData.newPassword && (
+                <div className="mt-3 p-3 bg-muted rounded-md">
+                  <p className="text-sm font-medium text-card-foreground mb-2">Password Requirements:</p>
+                  <div className="space-y-1">
+                    {requirements.map((req, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <CheckCircle className={`h-3 w-3 ${req.test ? 'text-success' : 'text-muted-foreground'}`} />
+                        <span className={`text-xs ${req.test ? 'text-success' : 'text-muted-foreground'}`}>
+                          {req.text}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
-        <label>
-          New Password
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-          />
-        </label>
+            {/* Confirm Password */}
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={formData.confirmPassword}
+                  onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              {formData.confirmPassword && !passwordsMatch && (
+                <p className="text-xs text-destructive">Passwords do not match</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
-        <label>
-          Confirm New Password
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-          />
-        </label>
-
-        <button type="submit" className={styles.submitBtn}>
-          Change Password
-        </button>
-
-        {successMessage && <p className={styles.success}>{successMessage}</p>}
+        <div className="flex gap-4">
+          <Button 
+            type="submit" 
+            disabled={isChanging || !isValidPassword || !passwordsMatch}
+            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+          >
+            {isChanging ? 'Updating...' : 'Update Password'}
+          </Button>
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={() => setFormData({ employeeId: '', newPassword: '', confirmPassword: '' })}
+          >
+            Cancel
+          </Button>
+        </div>
       </form>
     </div>
   );

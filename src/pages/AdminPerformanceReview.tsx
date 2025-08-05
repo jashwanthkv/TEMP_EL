@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Home, Bell, User, UserCircle } from 'lucide-react';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -38,6 +39,9 @@ const mockEmployees: Employee[] = [
 ];
 
 const AdminPerformanceReview = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const pieLabels = ['Projects Completed', 'Collaboration', 'Efficiency', 'Drawbacks', 'Innovation'];
 
@@ -147,9 +151,12 @@ const AdminPerformanceReview = () => {
         <div className="flex items-center space-x-6">
           <span className="text-lg font-bold text-green-700">EMPWR</span>
 
-          <button className="relative text-green-700 hover:text-green-800">
-            <Bell className="h-5 w-5" />
-          </button>
+          <button
+                            onClick={() => navigate('/admin/notifications')}
+                            className="relative text-green-800 hover:text-green-900"
+                          >
+                            <Bell className="h-5 w-5" />
+                          </button>
 
           <div className="relative group">
             <button className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full">

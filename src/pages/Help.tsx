@@ -11,8 +11,12 @@ import { useNavigate } from 'react-router-dom';
 import Ticket from './Ticket'; // ✅ Adjust path if needed
 import { Button } from '@/components/ui/button';
 import { Home, Bell, User, UserCircle } from 'lucide-react';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 const Help = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);

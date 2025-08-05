@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Bell, Home, User, UserCircle } from 'lucide-react';
+import { ArrowLeft, Bell, Home, User, UserCircle, LogOut, Lock, Settings, HelpCircle, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 import UpdateProfile from '@/components/ui/UpdateProfile';
 import CompanyInfo from '@/components/ui/CompanyInfo';
@@ -14,35 +15,31 @@ import NotificationsSettings from '@/components/ui/NotificationsSettings';
 import FeedbackSupport from '@/components/ui/FeedbackSupport';
 
 const sections = [
-  { label: '👤 Update Profile', key: 'update-profile' },
-  { label: '🏢 Company Info', key: 'company-info' },
-  { label: '🕑 Working Hours', key: 'working-hours' },
-  { label: '🧮 Timesheet Settings', key: 'timesheet-settings' },
-  { label: '📦 Modules Toggle', key: 'modules-toggle' },
-  { label: '🔄 Backup & Restore', key: 'backup-restore' },
-  { label: '🔒 Change Password', key: 'change-password' },
-  { label: '📧 Notification Preferences', key: 'notifications' },
-  { label: '🛠️ Feedback & Support', key: 'feedback-support' },
+  { label: 'Backup & Restore', key: 'backup-restore', icon: Database },
+  { label: 'Change Password', key: 'change-password', icon: Lock },
+  { label: 'Help & Support', key: 'feedback-support', icon: HelpCircle },
 ];
 
 const AdminSettings = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const [selected, setSelected] = useState(sections[0].key);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
 
   const renderContent = () => {
     switch (selected) {
-      case 'update-profile': return <UpdateProfile />;
-      case 'company-info': return <CompanyInfo />;
-      case 'working-hours': return <WorkingHours />;
-      case 'timesheet-settings': return <TimesheetSettings />;
-      case 'modules-toggle': return <ModulesToggle />;
-      case 'backup-restore': return <BackupRestore />;
-      case 'change-password': return <ChangePassword />;
-      case 'notifications': return <NotificationsSettings />;
-      case 'feedback-support': return <FeedbackSupport />;
-      default: return null;
+      case 'backup-restore':
+        return <BackupRestore />;
+      case 'change-password':
+        return <ChangePassword />;
+      case 'feedback-support':
+        return <FeedbackSupport />;
+      default:
+        return null;
     }
   };
 
@@ -57,85 +54,130 @@ const AdminSettings = () => {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-muted">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+      <header className="bg-card shadow-sm border-b border-border px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <img src="/logos.png" alt="Logo" className="h-10 w-auto object-contain" />
           <div>
-            <p className="text-lg font-bold text-green-700 leading-none">EPICAL LAYOUTS PVT LTD</p>
-            <p className="text-base font-semibold text-gray-600">Admin Settings</p>
+            <p className="text-lg font-bold text-brand leading-none">EPICAL LAYOUTS PVT LTD</p>
+            <p className="text-base font-semibold text-muted-foreground">Admin Settings</p>
           </div>
         </div>
 
         <div className="flex items-center space-x-6">
-          <span className="text-lg font-bold text-green-700">EMPWR</span>
+          <span className="text-lg font-bold text-brand">EMPWR</span>
 
-          <button className="relative text-green-700 hover:text-green-800">
-            <Bell className="h-6 w-6" />
-          </button>
-
-          {/* Profile Dropdown (click-based) */}
+          <button
+                            onClick={() => navigate('/admin/notifications')}
+                            className="relative text-green-800 hover:text-green-900"
+                          >
+                            <Bell className="h-5 w-5" />
+                          </button>
+          {/* Profile Dropdown */}
           <div className="relative" ref={profileRef}>
             <button
               onClick={() => setIsProfileOpen(prev => !prev)}
-              className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full"
+              className="w-10 h-10 flex items-center justify-center hover:bg-brand-light rounded-full transition-colors"
             >
-              <User className="w-5 h-5 text-green-700" />
+              <User className="w-5 h-5 text-brand" />
             </button>
 
             {isProfileOpen && (
-              <div className="absolute right-0 mt-2 w-44 bg-white shadow-lg rounded-lg z-50">
+              <div className="absolute right-0 mt-2 w-44 bg-card shadow-lg rounded-lg z-50 border border-border">
                 <button
                   onClick={() => {
                     navigate('/admin/profile');
                     setIsProfileOpen(false);
                   }}
-                  className="w-full px-4 py-2 text-left text-gray-800 hover:bg-green-50 flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-card-foreground hover:bg-brand-light flex items-center gap-2 transition-colors"
                 >
-                  <UserCircle className="w-4 h-4 text-green-600" />
+                  <UserCircle className="w-4 h-4 text-brand" />
                   View Profile
                 </button>
               </div>
             )}
           </div>
 
-          <button onClick={() => navigate('/admin')} className="text-green-700 hover:bg-green-100 p-2 rounded-full transition">
+          <button 
+            onClick={() => navigate('/admin')} 
+            className="text-brand hover:bg-brand-light p-2 rounded-full transition-colors"
+          >
             <Home className="h-5 w-5" />
           </button>
         </div>
       </header>
 
       {/* Main Layout */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 px-4 py-6">
-        {/* Sidebar */}
-        <div className="space-y-2">
-          {sections.map(sec => (
+      <div className="flex-1 flex gap-4 p-6">
+        {/* Collapsible Sidebar */}
+        <div
+          className={`relative bg-card border border-border rounded-lg shadow-sm transition-all duration-300 ease-in-out ${
+            isSidebarHovered ? 'w-64' : 'w-16'
+          }`}
+          onMouseEnter={() => setIsSidebarHovered(true)}
+          onMouseLeave={() => setIsSidebarHovered(false)}
+        >
+          <div className="p-3 space-y-2">
+            {sections.map((sec) => {
+              const IconComponent = sec.icon;
+              return (
+                <Card
+                  key={sec.key}
+                  onClick={() => setSelected(sec.key)}
+                  className={`flex items-center cursor-pointer transition-all duration-200 hover:shadow-md p-3 rounded-md group ${
+                    selected === sec.key 
+                      ? 'bg-brand-light border-brand shadow-sm' 
+                      : 'border-transparent hover:bg-accent'
+                  }`}
+                >
+                  <div className="flex items-center min-w-0 w-full">
+                <IconComponent className="h-5 w-5 flex-shrink-0 text-green-600" />
+
+                    <span
+                      className={`ml-3 text-sm font-medium transition-all duration-300 whitespace-nowrap ${
+                        selected === sec.key ? 'text-brand-text' : 'text-card-foreground'
+                      } ${
+                        isSidebarHovered 
+                          ? 'opacity-100 translate-x-0' 
+                          : 'opacity-0 -translate-x-2 pointer-events-none'
+                      }`}
+                    >
+                      {sec.label}
+                    </span>
+                  </div>
+                </Card>
+              );
+            })}
+
+            {/* Logout Button */}
             <Card
-              key={sec.key}
-              className={`p-4 cursor-pointer transition hover:shadow-md rounded ${
-                selected === sec.key ? 'bg-blue-50 border-blue-500' : ''
-              }`}
-              onClick={() => setSelected(sec.key)}
+              onClick={() => {
+                localStorage.clear();
+                navigate('/');
+              }}
+              className="flex items-center cursor-pointer transition-all duration-200 hover:shadow-md p-3 rounded-md bg-destructive/10 hover:bg-destructive/20 border-destructive/20 group"
             >
-              {sec.label}
+              <div className="flex items-center min-w-0 w-full">
+                <LogOut className="h-5 w-5 flex-shrink-0 text-destructive" />
+                <span
+                  className={`ml-3 text-sm font-medium text-destructive transition-all duration-300 whitespace-nowrap ${
+                    isSidebarHovered 
+                      ? 'opacity-100 translate-x-0' 
+                      : 'opacity-0 -translate-x-2 pointer-events-none'
+                  }`}
+                >
+                  Logout
+                </span>
+              </div>
             </Card>
-          ))}
-          <Card
-            className="p-4 cursor-pointer transition hover:shadow-md rounded bg-red-50 text-red-600"
-            onClick={() => {
-              localStorage.clear();
-              navigate('/');
-            }}
-          >
-            🚪 Logout
-          </Card>
+          </div>
         </div>
 
         {/* Content Area */}
-        <div className="md:col-span-3">
-          <Card className="shadow border">
-            <CardContent className="p-6">
+        <div className="flex-1">
+          <Card className="shadow-sm border border-border h-full">
+            <CardContent className="p-6 h-full">
               {renderContent()}
             </CardContent>
           </Card>

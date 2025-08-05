@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import styles from './Timesheet.module.css';
 import {  Bell, Home, User, UserCircle } from 'lucide-react';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 
 const COLORS = ['#FF69B4', '#FFA500', '#00CED1', '#4CAF50', '#8E44AD'];
@@ -146,6 +147,9 @@ const getRunningHeight = (start: string) => {
 };
 
 export default function Timesheet() {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   // State for active projects
   const [activeProjects, setActiveProjects] = useState<string[]>([]);
   const navigate = useNavigate();

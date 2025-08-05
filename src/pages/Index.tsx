@@ -12,6 +12,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
+import { useAuth } from '@/context/AuthContext';
+
 
 const url = 'https://script.google.com/macros/s/AKfycbwMtbaiE6ETKlIt9AobORBLiysqKnXxCwt8wcnOosq0OTdzNYiV1kFB85OvU9EjLbfXuQ/exec';
 
@@ -22,7 +24,9 @@ const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const auth = getAuth();
+  const { login, isAuthenticated } = useAuth();
   const googleProvider = new GoogleAuthProvider();
+  // Index page is login, so no RequireLogin needed here
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,10 +136,12 @@ const Index = () => {
 
         // Navigate based on exact role from backend
         if (role && role.toLowerCase() === 'admin') {
-          navigate('/admin', { replace: true });
-        } else {
-          navigate('/dashboard', { replace: true });
-        }
+            await login(emailLower, password);
+            navigate('/admin', { replace: true });
+          } else {
+            await login(emailLower, password);
+            navigate('/dashboard', { replace: true });
+          }
       } else {
         toast({
           title: 'Invalid Credentials',
@@ -167,7 +173,9 @@ const Index = () => {
   };
 
   const signInWithGoogle = async () => {
+    const emailLower = email.toLowerCase();
     setAuthing(true);
+
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const userEmail = result.user.email?.toLowerCase() || '';
@@ -247,7 +255,7 @@ const Index = () => {
         // Store full employee profile for reference
         localStorage.setItem('employeeProfile', JSON.stringify(employee));
 
-        // Use leave summary from Google auth response since it already includes the correct data
+        //  leave summary from Google auth response since it already includes the correct data
         if (data.leave_summary && !data.leave_summary.error) {
           localStorage.setItem('leaveSummary', JSON.stringify(data.leave_summary));
           console.log('Stored leave summary from Google auth response');
@@ -268,8 +276,10 @@ const Index = () => {
 
         // Navigate based on exact role from backend
         if (role && role.toLowerCase() === 'admin') {
+          await login(emailLower, password);
           navigate('/admin', { replace: true });
         } else {
+          await login(emailLower, password);
           navigate('/dashboard', { replace: true });
         }
       } else {

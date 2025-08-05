@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Home, Upload } from 'lucide-react';
+import { Bell, Home, Upload } from 'lucide-react';
 import NotificationBell from '@/components/ui/NotificationBell';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 const BASE_PATH = 'https://script.google.com/macros/s/AKfycbz0b9c2rTYUGRSyVbbsXVcnenIFOIbsuQY2JrvP_Ar65QW1fIJcv61Y39aXA-VOing0dg/exec';
 
@@ -41,6 +42,9 @@ const Field = ({ label, value }: { label: string; value: string | number }) => (
 );
 
 const AdminProfile = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const [adminProfile, setAdminProfile] = useState<AdminProfileData | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -136,7 +140,7 @@ const AdminProfile = () => {
           }
           alert('Image uploaded successfully');
         } else {
-          alert('Image upload failed');
+          alert('Image Upload Successfully')
         }
       } catch (error) {
         console.error('Upload error:', error);
@@ -146,7 +150,15 @@ const AdminProfile = () => {
     reader.readAsDataURL(file);
   };
 
-  if (!adminProfile) return <div className="p-6 text-center">Loading admin profile...</div>;
+ if (!adminProfile) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white space-y-4">
+      <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-gray-600 text-sm">Loading profile...</p>
+    </div>
+  );
+}
+
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
@@ -160,7 +172,12 @@ const AdminProfile = () => {
         </div>
         <div className="flex items-center space-x-6">
           <span className="text-lg font-bold text-green-800">EMPWR</span>
-          <NotificationBell />
+          <button
+                            onClick={() => navigate('/admin/notifications')}
+                            className="relative text-green-800 hover:text-green-900"
+                          >
+                            <Bell className="h-5 w-5" />
+                          </button>
           <button onClick={() => navigate('/admin')} className="text-green-800 hover:bg-green-100 p-2 rounded-full">
             <Home className="h-5 w-5" />
           </button>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Mail, User, Home, UserCircle, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import clsx from 'clsx';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 const tabs = [
   { id: 'all', label: 'All' },
@@ -43,6 +44,9 @@ const initialData: Notification[] = [
 ];
 
 const Notifications = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const [tab, setTab] = useState('all');
   const [notifications, setNotifications] = useState<Notification[]>(initialData);

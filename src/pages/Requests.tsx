@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Download, FileText, Send } from 'lucide-react';
 import {  Bell, Home, User, UserCircle } from 'lucide-react';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 // Direct Google Apps Script URL - UPDATED WITH NEW DEPLOYMENT
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzcgXozG8UVlaZLUXe3BMJ_TrPS-VMBtkWftPOoUwJSq3ct1GHPAcfJ5Ly7hkcOfCFDXg/exec';
@@ -30,12 +31,18 @@ async function callAppsScript(action: string, params: Record<string, string | nu
   }
   
   // Include empId for payslips and approved docs actions, spreadsheetId for all actions
-  const requestData = { 
+  const requestData: Record<string, string | number> = { 
     action, 
     ...(spreadsheetId ? { spreadsheetId } : {}),
     ...(empId && (action === 'getPayslips' || action === 'getApprovedDocs') ? { empId } : {}),
     ...params 
   };
+  
+  // For payslip requests, ensure we have the required parameters
+  if (action === 'getPayslips') {
+    requestData.months = params.months || '6';
+    requestData.latestOnly = params.latestOnly || 'true';
+  }
   
   console.log('Request Data:', requestData);
   
@@ -136,13 +143,16 @@ interface Payslip {
 
 interface ApiResponse {
   status?: string;
-  data?: DocumentRequest[] | Payslip[];
+  data?: DocumentRequest[] | Payslip[] | { downloadLink?: string; link?: string; fileId?: string };
   error?: string;
   message?: string;
   rawResponse?: string;
 }
 
 const Requests = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const [documentType, setDocumentType] = useState('Experience Certificate');
   const [reason, setReason] = useState('');
@@ -150,12 +160,47 @@ const Requests = () => {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
 
   // Get configuration from localStorage - handle both correct and typo versions
   const spreadsheetId = localStorage.getItem('spreadsheetId') || localStorage.getItem('spreadsheeetId');
   const empId = localStorage.getItem('empId') || localStorage.getItem('userId');
   const userEmail = localStorage.getItem('userEmail') || '';
   const [userName, setUserName] = useState(localStorage.getItem('userName') || 'Employee');
+
+  // Helper function to filter and process payslips
+  const processPayslips = (payslipData: Payslip[]): Payslip[] => {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    // Group payslips by month-year and keep only the latest from each month
+    const payslipsByMonth = payslipData
+      .filter(payslip => {
+        try {
+          const payslipDate = new Date(payslip.date);
+          return payslipDate >= sixMonthsAgo && payslipDate <= new Date();
+        } catch {
+          return false; // Skip payslips with invalid dates
+        }
+      })
+      .reduce((acc, payslip) => {
+        try {
+          const payslipDate = new Date(payslip.date);
+          const monthYear = `${payslipDate.getFullYear()}-${String(payslipDate.getMonth() + 1).padStart(2, '0')}`;
+          
+          if (!acc[monthYear] || new Date(payslip.date) > new Date(acc[monthYear].date)) {
+            acc[monthYear] = payslip;
+          }
+        } catch {
+          // Skip payslips with invalid dates
+        }
+        return acc;
+      }, {} as Record<string, Payslip>);
+    
+    // Convert back to array and sort by date (newest first)
+    return Object.values(payslipsByMonth)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
 
   // Debug logging
   console.log('Configuration Check:', {
@@ -173,7 +218,7 @@ const Requests = () => {
   const [connectionError, setConnectionError] = useState<string>('');
   const [testResult, setTestResult] = useState<string>('');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-const profileRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
 
 // Close dropdown when clicking outside
 useEffect(() => {
@@ -203,7 +248,7 @@ useEffect(() => {
     const loadData = async () => {
       if (!spreadsheetId) {
         setConnectionError('Spreadsheet ID not found. Please ensure it is configured in localStorage.');
-        setLoading(false);
+        setLoading(true);
         return;
       }
 
@@ -226,22 +271,35 @@ useEffect(() => {
           setConnectionError('CORS issue detected. Please ensure the Google Apps Script is properly configured with CORS headers.');
         }
         if (historyResponse.data) {
+          console.log('Setting request history:', historyResponse.data);
           setRequestHistory(historyResponse.data as DocumentRequest[]);
         }
 
         // Load approved documents (includes both spreadsheet and Drive documents)
         const approvedResponse = await callAppsScript('getApprovedDocs');
         console.log('Approved docs response:', approvedResponse);
+        console.log('Approved docs data structure:', JSON.stringify(approvedResponse.data, null, 2));
         if (approvedResponse.data) {
           setApprovedDocs(approvedResponse.data as DocumentRequest[]);
         }
 
-        // Load payslips from employee's Drive folder
-        const payslipsResponse = await callAppsScript('getPayslips');
+        // Load payslips from employee's Drive folder (last 6 months, latest per month)
+        const payslipsResponse = await callAppsScript('getPayslips', {
+          months: '6',
+          latestOnly: 'true'
+        });
         console.log('Payslips response:', payslipsResponse);
         if (payslipsResponse.data && Array.isArray(payslipsResponse.data) && payslipsResponse.data.length > 0) {
-          setPayslips(payslipsResponse.data as Payslip[]);
+          console.log('Raw payslips received:', payslipsResponse.data.length);
+          // Process payslips to get last 6 months and latest per month
+          const processedPayslips = processPayslips(payslipsResponse.data as Payslip[]);
+          console.log('Processed payslips (last 6 months, latest per month):', processedPayslips.length);
+          setPayslips(processedPayslips);
           setPayslipError('');
+          
+          if (processedPayslips.length === 0) {
+            setPayslipError('No payslips found in the last 6 months');
+          }
         } else if (payslipsResponse.message) {
           // Handle informational messages from backend
           setPayslipError(payslipsResponse.message);
@@ -326,10 +384,101 @@ useEffect(() => {
       item.reason.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleDownload = (link: string, fileName: string) => {
+  const handleDownload = async (docName: string, timestamp: string, fileName?: string) => {
+    try {
+      // First, check if we already have a downloadLink in the document data
+      const docData = approvedDocs.find(doc => doc.docName === docName && doc.timestamp === timestamp);
+      if (docData && docData.downloadLink) {
+        console.log('Using existing download link:', docData.downloadLink);
+        window.open(docData.downloadLink, '_blank');
+        return;
+      }
+
+      // If no direct link, try to get it from the backend
+      console.log('Attempting download with:', {
+        docName,
+        timestamp,
+        empId: empId || ''
+      });
+      
+      // Try different backend actions that might exist
+      const actions = ['getApprovedDocumentLink', 'getDocumentLink', 'downloadDocument'];
+      
+      for (const action of actions) {
+        try {
+          const response = await callAppsScript(action, {
+            docName,
+            timestamp,
+            empId: empId || ''
+          });
+
+          if (response.status === 'success' && response.data) {
+            const data = response.data as { downloadLink?: string; link?: string; fileId?: string };
+            const downloadLink = data.downloadLink || data.link;
+            if (downloadLink) {
+              console.log(`Success with action ${action}:`, downloadLink);
+              window.open(downloadLink, '_blank');
+              return;
+            }
+          }
+        } catch (error) {
+          console.log(`Action ${action} failed:`, error);
+          continue;
+        }
+      }
+      
+      // If all backend attempts fail, show a helpful error
+      alert('❌ Unable to download document. The download link may not be available or the backend service needs to be updated.');
+      
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      alert('❌ Failed to download document.');
+    }
+  };
+
+  const handlePayslipDownload = (link: string, fileName: string) => {
     window.open(link, '_blank');
   };
 
+  // Loading skeleton components
+  const PayslipSkeleton = () => (
+    <div className="flex justify-between items-center border-b py-2 animate-pulse">
+      <div className="flex-1">
+        <div className="h-4 w-32 bg-gray-200 rounded mb-1" />
+        <div className="h-3 w-20 bg-gray-200 rounded" />
+      </div>
+      <div className="h-8 w-20 bg-gray-200 rounded" />
+    </div>
+  );
+
+  const ApprovedDocumentSkeleton = () => (
+    <div className="flex justify-between items-center border-b py-2 animate-pulse">
+      <div className="flex-1">
+        <div className="h-4 w-40 bg-gray-200 rounded mb-1" />
+        <div className="h-3 w-48 bg-gray-200 rounded mb-1" />
+        <div className="h-3 w-24 bg-gray-200 rounded" />
+      </div>
+      <div className="h-8 w-20 bg-gray-200 rounded" />
+    </div>
+  );
+
+  const DocumentRequestSkeleton = () => (
+    <tr className="border-b animate-pulse">
+      <td className="p-3"><div className="h-4 w-24 bg-gray-200 rounded" /></td>
+      <td className="p-3"><div className="h-4 w-32 bg-gray-200 rounded" /></td>
+      <td className="p-3"><div className="h-4 w-28 bg-gray-200 rounded" /></td>
+      <td className="p-3"><div className="h-6 w-16 bg-gray-200 rounded-full" /></td>
+    </tr>
+  );
+
+  if (loading) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white space-y-4">
+      <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-gray-600 text-sm">Loading  Document Request ...</p>
+    </div>
+  );
+}
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200">
       <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
@@ -345,11 +494,13 @@ useEffect(() => {
     <span className="text-lg font-bold text-green-700">EMPWR</span>
 
     <button
-  onClick={() => navigate('/notifications')}
-  className="relative text-green-800 hover:text-green-900"
->
-  <Bell className="h-5 w-5" />
-</button>
+      onClick={() => navigate('/notifications')}
+      className="relative text-green-800 hover:text-green-900 p-2 rounded-full transition"
+      title="Notifications"
+      aria-label="View notifications"
+    >
+      <Bell className="h-5 w-5" />
+    </button>
 
 
     {/* Profile Dropdown (Click-based) */}
@@ -357,6 +508,8 @@ useEffect(() => {
       <button
         onClick={() => setIsProfileOpen(prev => !prev)}
         className="w-10 h-10 flex items-center justify-center hover:bg-green-100 rounded-full"
+        title="User menu"
+        aria-label="Open user menu"
       >
         <User className="w-5 h-5 text-green-700" />
       </button>
@@ -380,6 +533,8 @@ useEffect(() => {
     <button
       onClick={() => navigate('/dashboard')}
       className="text-green-700 hover:bg-green-100 p-2 rounded-full transition"
+      title="Go to dashboard"
+      aria-label="Navigate to dashboard"
     >
       <Home className="h-5 w-5" />
     </button>
@@ -442,12 +597,12 @@ useEffect(() => {
         <div className="grid md:grid-cols-3 gap-6 items-stretch">
           <div className="space-y-6 flex flex-col h-full">
             <Card className="shadow-md h-[420px] flex flex-col">
-              <CardHeader>
+              <CardHeader className="px-6 py-4">
                 <CardTitle className="text-green-700 text-lg flex gap-2 items-center">
                   <FileText className="w-5 h-5" /> Document Request
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 flex-1">
+              <CardContent className="space-y-4 flex-1 overflow-y-auto">
                 <select
                   value={documentType}
                   onChange={(e) => setDocumentType(e.target.value)}
@@ -491,36 +646,56 @@ useEffect(() => {
             </Card>
 
             <Card className="shadow-md h-[320px] flex flex-col">
-              <CardHeader>
-                <CardTitle className="text-green-700 text-lg flex gap-2 items-center">
-                  <FileText className="w-5 h-5" /> Payslips (Last 6 Months)
+              <CardHeader className="px-6 py-4">
+                <CardTitle className="text-green-700 text-lg flex gap-2 items-center justify-between">
+                  <div className="flex gap-2 items-center">
+                    <FileText className="w-5 h-5" /> Payslips (Last 6 Months)
+                  </div>
+                  {!loading && payslips.length > 0 && (
+                    <span className="text-sm bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                      {payslips.length}
+                    </span>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 overflow-y-auto flex-1">
                 {loading ? (
-                  <p className="text-sm text-gray-500">Loading payslips...</p>
+                  <div className="space-y-2">
+                    {Array(3).fill(0).map((_, idx) => (
+                      <PayslipSkeleton key={idx} />
+                    ))}
+                  </div>
                 ) : payslipError ? (
                   <div className="text-sm">
                     <p className="text-red-600">Error: {payslipError}</p>
                     <p className="text-gray-500 mt-1">Employee ID: {empId}</p>
                   </div>
                 ) : payslips.length > 0 ? (
-                  payslips.map((payslip, index) => (
-                    <div key={index} className="flex justify-between items-center border-b py-2">
-                      <div>
-                        <p className="font-medium">{payslip.name}</p>
-                        <p className="text-sm text-gray-600">{payslip.date}</p>
+                  payslips.map((payslip, index) => {
+                    // Format the date to show month and year clearly
+                    const payslipDate = new Date(payslip.date);
+                    const formattedDate = payslipDate.toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long' 
+                    });
+                    
+                    return (
+                      <div key={index} className="flex justify-between items-center border-b py-2">
+                        <div>
+                          <p className="font-medium">{payslip.name}</p>
+                          <p className="text-sm text-gray-600">{formattedDate}</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex gap-2 items-center"
+                          onClick={() => handlePayslipDownload(payslip.link, payslip.name)}
+                        >
+                          <Download className="w-4 h-4" /> Download
+                        </Button>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex gap-2 items-center"
-                        onClick={() => handleDownload(payslip.link, payslip.name)}
-                      >
-                        <Download className="w-4 h-4" /> Download
-                      </Button>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="text-sm">
                     <p className="text-gray-500">No payslips available.</p>
@@ -533,12 +708,19 @@ useEffect(() => {
 
           <div className="md:col-span-2 space-y-6 flex flex-col h-full">
             <Card className="shadow-md h-[420px] flex flex-col">
-              <CardHeader>
+              <CardHeader className="px-6 py-4">
                 <CardTitle className="text-green-800 text-md">Approved Documents</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 overflow-y-auto max-h-[340px] pr-2">
+              <CardContent className="space-y-2 flex-1 overflow-y-auto">
+                <div className="sticky top-0 bg-white z-10 pb-2">
+                  <div className="font-semibold text-gray-700">Document Type / Reason / Date</div>
+                </div>
                 {loading ? (
-                  <p className="text-sm text-gray-500">Loading approved documents...</p>
+                  <div className="space-y-2">
+                    {Array(3).fill(0).map((_, idx) => (
+                      <ApprovedDocumentSkeleton key={idx} />
+                    ))}
+                  </div>
                 ) : filteredApproved.length > 0 ? (
                   filteredApproved.map((doc, idx) => (
                     <div key={idx} className="flex justify-between items-center border-b py-2">
@@ -551,7 +733,7 @@ useEffect(() => {
                         variant="outline"
                         size="sm"
                         className="flex gap-2 items-center"
-                        onClick={() => handleDownload(doc.downloadLink || '', doc.docName)}
+                        onClick={() => handleDownload(doc.docName, doc.timestamp, doc.docName)}
                       >
                         <Download className="w-4 h-4" /> Download
                       </Button>
@@ -563,13 +745,15 @@ useEffect(() => {
               </CardContent>
             </Card>
 
-            <Card className="shadow-md flex-1">
-              <CardContent className="p-6 max-h-[320px] overflow-y-auto">
-                <h2 className="text-lg font-semibold text-gray-700 mb-4">All Document Requests</h2>
-                <div className="overflow-x-auto">
+            <Card className="shadow-md h-[320px] flex flex-col">
+              <CardHeader className="bg-white px-6 py-4 rounded-t-lg">
+                <CardTitle className="text-lg font-semibold text-gray-700">All Document Requests</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-hidden px-6">
+                <div className="overflow-y-auto h-full">
                   <table className="min-w-full table-auto text-sm text-left">
-                    <thead>
-                      <tr className="bg-slate-100 text-gray-700">
+                    <thead className="sticky top-0 bg-slate-100 z-10">
+                      <tr className="text-gray-700">
                         <th className="p-3">Document Type</th>
                         <th className="p-3">Reason</th>
                         <th className="p-3">Requested</th>
@@ -578,11 +762,11 @@ useEffect(() => {
                     </thead>
                     <tbody>
                       {loading ? (
-                        <tr>
-                          <td colSpan={4} className="p-4 text-center text-gray-500">
-                            Loading requests...
-                          </td>
-                        </tr>
+                        <>
+                          {Array(5).fill(0).map((_, idx) => (
+                            <DocumentRequestSkeleton key={idx} />
+                          ))}
+                        </>
                       ) : filteredHistory.length > 0 ? (
                         filteredHistory.map((req, index) => (
                           <tr key={index} className="border-b">

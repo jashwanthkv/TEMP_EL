@@ -19,8 +19,9 @@ function jsonpRequest(url: string): Promise<any> {
 }
 
 import React, { useState, useEffect, useRef } from 'react';
+import RequireLogin from '@/components/ui/RequireLogin';
 // Backend API URL
-const EMPLOYEE_API_URL = "https://script.google.com/macros/s/AKfycbwnEjoeu2nrlKh4vAdbd30mgQpBA4qkyCar8i_GnozzgHzFG23xlCOpODAjIB4LmHSq/exec";
+const EMPLOYEE_API_URL = "https://script.google.com/macros/s/AKfycbwMY8qPpC1ZrED-gTz0BTIezkgP1T40dafonNSyupOYktzRhIYYcNXns8h14QB9YskL/exec";
 
 // Map frontend EmployeeData to backend parameter names for add
 function mapToBackendParams(data: EmployeeData) {
@@ -128,6 +129,9 @@ let initialData: EmployeeData = {
 type FormType = 'add' | 'update';
 
 const ManageEmployees = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const [formType, setFormType] = useState<FormType>('add');
   const [employeeData, setEmployeeData] = useState<EmployeeData>({ ...initialData });
@@ -138,10 +142,8 @@ const ManageEmployees = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef(null);
   const [employeeCache, setEmployeeCache] = useState<{ [id: string]: EmployeeData }>({});
-  
-
-
-  
+  const [formSubmitting, setFormSubmitting] = useState(false); // For add/update button
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
     function handleClickOutside(event) {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
@@ -250,6 +252,7 @@ const ManageEmployees = () => {
 
 
   const handleSubmit = async () => {
+  setFormSubmitting(true); // Start loader
   const params = formType === 'add'
     ? { action: "addEmployee", ...mapToBackendParams(employeeData) }
     : {
@@ -285,18 +288,14 @@ const ManageEmployees = () => {
 
   const url = EMPLOYEE_API_URL + "?" + new URLSearchParams(params).toString();
 
-  // ✅ DEBUG LOGS
-  console.log("Submitting Employee:", formType);
-  console.log("Aadhar:", params.aadhar);
-  console.log("Passport:", employeeData.passport);
-  console.log("Final URL:", url);
-
   try {
     const res = await fetch(url);
     const data = await res.json();
     alert(data.message);
   } catch (err) {
     alert(formType === 'add' ? "Failed to add employee." : "Failed to update employee.");
+  } finally {
+    setFormSubmitting(false); // End loader
   }
 };
 
@@ -372,6 +371,13 @@ const ManageEmployees = () => {
 
   return (
     <div className="bg-gray-50 min-h-screen overflow-x-hidden">
+      {(formSubmitting || loadingEmployees) && (
+  <div className="fixed top-0 left-0 w-full h-full bg-white/70 z-[9999] flex items-center justify-center">
+    <div className="w-16 h-16 border-4 border-green-600 border-t-transparent rounded-full animate-spin" />
+  </div>
+)}
+
+
       <header className="bg-white shadow-sm border-b border-gray-200 px-8 py-4 flex justify-between items-center w-full">
         <div className="flex items-center gap-3">
           <img src="/logos.png" alt="Logo" className="h-10 w-auto object-contain" />
@@ -475,16 +481,17 @@ const ManageEmployees = () => {
                   </Select>
 
                 </div>
-                <Button onClick={() => handleFetch(updateId)} // ✅ now this is a function returning a Promise
-              disabled={!updateId || loadingEmployees}
-              className={`text-white px-4 py-2 rounded-full shadow transition self-end ${
-                updateId && !loadingEmployees
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-gray-300 cursor-not-allowed'
-              }`}
-            >
-              {loadingEmployees ? 'Loading...' : 'Fetch'}
-            </Button>
+                <Button
+  onClick={() => handleFetch(updateId)}
+  disabled={!updateId || loadingEmployees}
+  className={`text-white px-4 py-2 rounded-full shadow transition self-end ${
+    updateId && !loadingEmployees
+      ? 'bg-green-600 hover:bg-green-700'
+      : 'bg-gray-300 cursor-not-allowed'
+  }`}
+>
+  Fetch
+</Button>
 
               </div>
             </CardContent>
@@ -569,16 +576,16 @@ const ManageEmployees = () => {
             )}
 
             <Button
-              onClick={handleSubmit}
-              disabled={!isFormValid}
-              className={`rounded-full px-8 py-2 shadow-md transition order-1 md:order-2 ${
-                isFormValid
-                  ? 'bg-gradient-to-r from-green-500 to-green-700 text-white hover:bg-gradient-to-r hover:from-green-600 hover:to-green-800'
-                  : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-              }`}
-            >
-              {formType === 'add' ? 'Add Employee' : 'Update Employee'}
-            </Button>
+  onClick={handleSubmit}
+  disabled={!isFormValid || formSubmitting}
+  className={`rounded-full px-8 py-2 shadow-md transition order-1 md:order-2 ${
+    isFormValid && !formSubmitting
+      ? 'bg-gradient-to-r from-green-500 to-green-700 text-white hover:bg-gradient-to-r hover:from-green-600 hover:to-green-800'
+      : 'bg-gray-300 text-gray-600 cursor-not-allowed'
+  }`}
+>
+  {formType === 'add' ? 'Add' : 'Update'}
+</Button>
           </div>
         </div>
       </div>

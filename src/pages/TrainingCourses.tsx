@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { useNavigate } from 'react-router-dom';
 import { Home, Bell, User, UserCircle } from 'lucide-react';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 type Course = {
   name: string;
@@ -14,6 +15,9 @@ type Course = {
 };
 
 const TrainingCourses = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const [search, setSearch] = useState('');
   const [notYetCourses, setNotYetCourses] = useState<Course[]>([]);
   const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
@@ -24,7 +28,7 @@ const TrainingCourses = () => {
   const navigate = useNavigate();
 
   const scriptURL =
-    'https://script.google.com/macros/s/AKfycbwAlAIg39DiQgbYnlivOr9zIowb_2Y3iW9o1kDFBItgMYPxqewxeLX1b7hbrXs61MeWAA/exec';
+    'https://script.google.com/macros/s/AKfycbxArZuprPnhGjEMwAt1K2zNnWNOLLVVCAgRyV9zKDYGY8AYgxvgoQ1RS6qA8MXaqK6TZg/exec';
 
   useEffect(() => {
   const sheetId = localStorage.getItem("spreadsheetId");
@@ -88,12 +92,12 @@ const TrainingCourses = () => {
 
   if (loading) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-green-600 border-opacity-40"></div>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white space-y-4">
+      <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-gray-600 text-sm">Loading Courses...</p>
     </div>
   );
 }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 pb-20">
       {/* Header */}

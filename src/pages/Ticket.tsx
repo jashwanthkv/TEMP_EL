@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 type TicketType = {
   ID: string;
@@ -13,9 +14,12 @@ type TicketType = {
 };
 
 const SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbxJ460fW7M-OyARIkITeyjG90BVh5V1sVzStndHW2posqFx8M6UjUBGmJKp4wg3ZtU1/exec';
+  'https://script.google.com/macros/s/AKfycbx1Dfw-sA-_-45H1v-nsRTpapwG_DkzFUDYP1g5iwdRPn2O5J1SXHlO1vHo0BmCRUEd/exec';
 
 const Ticket = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const [sheetId, setSheetId] = useState<string | null>(null);
   const [tickets, setTickets] = useState<TicketType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +27,7 @@ const Ticket = () => {
     title: '',
     reason: '',
     priority: 'Low',
-    status: 'pending',
+    status: 'Pending',
   });
 
   // Load sheetId from localStorage
@@ -99,7 +103,7 @@ const Ticket = () => {
           title: '',
           reason: '',
           priority: 'Low',
-          status: 'pending',
+          status: 'Pending',
         });
         fetchTickets();
       } else {

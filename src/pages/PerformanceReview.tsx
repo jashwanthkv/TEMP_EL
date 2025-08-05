@@ -6,10 +6,14 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Home, Bell, User, UserCircle } from 'lucide-react';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const PerformanceReview = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const [selected, setSelected] = useState<string | null>(null);
   const [efficiency, setEfficiency] = useState(0);

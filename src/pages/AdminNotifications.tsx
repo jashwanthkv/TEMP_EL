@@ -1,61 +1,192 @@
-import React from 'react';
-import { ArrowLeft } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Mail, User, Home, UserCircle, X } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import clsx from 'clsx';
+import RequireLogin from '@/components/ui/RequireLogin';
 
-const notifications = [
+const tabs = [
+  { id: 'all', label: 'All' },
+  { id: 'unread', label: 'Unread' },
+  { id: 'read', label: 'Read' },
+];
+
+type Notification = {
+  id: number;
+  title: string;
+  message: string;
+  time: string;
+  read: boolean;
+};
+
+const initialData: Notification[] = [
   {
-    type: 'LeaveRequest',
-    title: 'New Leave Request from EMP002',
-    message: 'Samantha requested Sick Leave from 10th to 12th July.',
-    timestamp: '2025-07-09 10:15 AM',
+    id: 1,
+    title: 'System Maintenance',
+    message: 'Scheduled maintenance will occur on August 10th from 1 AM to 4 AM.',
+    time: '11:00 AM, August 1, 2025',
+    read: false,
   },
   {
-    type: 'DocumentRequest',
-    title: 'Document Request: Bonafide',
-    message: 'Raj (EMP007) requested a Bonafide certificate.',
-    timestamp: '2025-07-08 03:40 PM',
+    id: 2,
+    title: 'New Employee Registered',
+    message: 'John Doe has been added to the employee database.',
+    time: '2:30 PM, July 31, 2025',
+    read: true,
   },
   {
-    type: 'Holiday',
-    title: 'Holiday Added',
-    message: 'Independence Day (15th Aug) added to the calendar.',
-    timestamp: '2025-07-07 09:00 AM',
-  },
-  {
-    type: 'LeaveRequest',
-    title: 'Leave Request Approved',
-    message: 'EMP005’s Annual Leave has been approved.',
-    timestamp: '2025-07-06 05:25 PM',
+    id: 3,
+    title: 'Policy Update',
+    message: 'HR policy has been updated. Please review the latest changes.',
+    time: '9:15 AM, July 30, 2025',
+    read: false,
   },
 ];
 
+const isAuthenticated = () => !!localStorage.getItem('userEmail');
+
 const AdminNotifications = () => {
+  if (!isAuthenticated()) {
+    return <RequireLogin />;
+  }
+  
   const navigate = useNavigate();
+  const [tab, setTab] = useState('all');
+  const [notifications, setNotifications] = useState<Notification[]>(initialData);
+  const [selectedMessage, setSelectedMessage] = useState<Notification | null>(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !(profileRef.current as any).contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleOpenMessage = (msg: Notification) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === msg.id ? { ...n, read: true } : n))
+    );
+    setSelectedMessage(msg);
+  };
+
+  const filteredNotifications = notifications.filter((n) => {
+    if (tab === 'all') return true;
+    if (tab === 'read') return n.read;
+    return !n.read;
+  });
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      
-
-      <div className="space-y-4">
-        {notifications.map((note, idx) => (
-          <div
-            key={idx}
-            className="bg-white border-l-4 p-4 rounded shadow-sm"
-            style={{
-              borderColor:
-                note.type === 'LeaveRequest'
-                  ? '#F59E0B'
-                  : note.type === 'DocumentRequest'
-                  ? '#6366F1'
-                  : '#10B981',
-            }}
-          >
-            <p className="text-gray-800 font-semibold mb-1">{note.title}</p>
-            <p className="text-gray-600 text-sm">{note.message}</p>
-            <p className="text-xs text-gray-400 mt-1">{note.timestamp}</p>
+    <div className="min-h-screen bg-gray-50 relative">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <img src="/logos.png" alt="Logo" className="h-10 w-auto" />
+          <div>
+            <p className="text-lg font-bold text-green-700">EPICAL LAYOUTS PVT LTD</p>
+            <p className="text-sm text-gray-600">Admin Notifications</p>
           </div>
-        ))}
-      </div>
+        </div>
+        <div className="flex items-center gap-5">
+          <span className="text-lg font-bold text-green-700">EMPWR</span>
+          <div className="relative" ref={profileRef}>
+            <button onClick={() => setIsProfileOpen((prev) => !prev)} className="rounded-full p-2 hover:bg-green-100">
+              <User className="w-5 h-5 text-green-700" />
+            </button>
+            {isProfileOpen && (
+              <div className="absolute right-0 mt-2 w-44 bg-white rounded shadow z-50">
+                <button
+                  onClick={() => {
+                    navigate('/admin/profile');
+                    setIsProfileOpen(false);
+                  }}
+                  className="w-full px-4 py-2 flex items-center gap-2 hover:bg-green-50"
+                >
+                  <UserCircle className="w-4 h-4 text-green-600" /> View Profile
+                </button>
+              </div>
+            )}
+          </div>
+          <button onClick={() => navigate('/admin')} className="p-2 hover:bg-green-100 rounded-full">
+            <Home className="w-5 h-5 text-green-700" />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-4xl mx-auto py-8 px-4">
+        {/* Tabs */}
+        <div className="flex space-x-4 border-b border-gray-200 mb-6 pb-2">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => {
+                setTab(t.id);
+                setSelectedMessage(null);
+              }}
+              className={clsx(
+                'pb-2 font-medium text-sm',
+                tab === t.id ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-600 hover:text-green-600'
+              )}
+            >
+              {t.label} Messages
+            </button>
+          ))}
+        </div>
+
+        {/* Message List or Detail View */}
+        {selectedMessage ? (
+          <Card className="shadow-md bg-white p-6 relative">
+            <button
+              onClick={() => setSelectedMessage(null)}
+              className="absolute top-4 right-4 p-1 text-gray-500 hover:text-red-500"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <Mail className="text-blue-600 w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">{selectedMessage.title}</h3>
+                <p className="text-sm text-gray-500">{selectedMessage.time}</p>
+              </div>
+            </div>
+            <p className="text-gray-800 leading-relaxed">{selectedMessage.message}</p>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {filteredNotifications.map((n) => (
+              <Card
+                key={n.id}
+                onClick={() => handleOpenMessage(n)}
+                className={clsx(
+                  'cursor-pointer transition-shadow shadow-sm hover:shadow-md',
+                  n.read ? 'bg-white' : 'bg-green-50'
+                )}
+              >
+                <CardContent className="flex gap-4 p-5">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <Mail className="text-blue-600 w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-gray-800">{n.title}</p>
+                    <p className="text-sm text-gray-700 mt-1 truncate">{n.message}</p>
+                    <p className="text-xs text-gray-500 mt-1">{n.time}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {filteredNotifications.length === 0 && (
+              <p className="text-gray-500 text-center py-10">No {tab} messages available.</p>
+            )}
+          </div>
+        )}
+      </main>
     </div>
   );
 };

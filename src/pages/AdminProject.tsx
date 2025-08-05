@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MoreVertical, ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 function renderDropdown(label, open, setOpen, items, selected, setSelected) {
   return (
@@ -37,6 +38,9 @@ function renderDropdown(label, open, setOpen, items, selected, setSelected) {
 }
 
 const AdminProjects = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   // State declarations (unique, no duplicates)
   // State declarations (all at the top, before any logic)
   const [searchClientText, setSearchClientText] = useState('');

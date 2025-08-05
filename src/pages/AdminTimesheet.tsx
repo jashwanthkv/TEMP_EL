@@ -50,6 +50,7 @@
   );
 import React, { useEffect, useState, useRef } from 'react';
 import styles from './AdminTimesheet.module.css';
+import RequireLogin from '@/components/ui/RequireLogin';
 import {
   Clock,
   Folder,
@@ -94,6 +95,9 @@ const menuItems = [
 ];
 
 const AdminTimesheet: React.FC = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   // CSV Download Handler
   const handleDownloadCSV = () => {
     if (!employeeTimesheet || !selectedEmployee) return;
@@ -555,7 +559,7 @@ function filterTimesheetByDateRange(timesheet: any, range: { start: Date; end: D
       <div className="flex items-center space-x-6">
         <span className="text-lg font-bold text-green-700">EMPWR</span>
         <button
-          onClick={() => navigate('/notifications')}
+          onClick={() => navigate('/admin/notifications')}
           className="relative text-green-800 hover:text-green-900"
         >
           <Bell className="h-5 w-5" />

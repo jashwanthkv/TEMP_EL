@@ -45,44 +45,79 @@ import { useNavigate } from 'react-router-dom';
 import NotificationBell from '@/components/ui/NotificationBell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import RequireLogin from '@/components/ui/RequireLogin';
 
+type LeaveEntry = {
+  status?: string;
+};
+
+type LeaveData = {
+  leaveHistory?: LeaveEntry[];
+};
+
+type DocumentRequest = {
+  status?: string;
+};
+
+type NewsItem = {
+  title: string;
+  description: string;
+  image: string;
+  fullText: string;
+};
 
 const AdminPanel = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
-  const [selectedNews, setSelectedNews] = useState<any>(null);
+  const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+
+  // Dynamic state for statistics
+  const [totalEmployees, setTotalEmployees] = useState<number>(0);
+  const [pendingLeaves, setPendingLeaves] = useState<number>(0);
+  const [activeProjects, setActiveProjects] = useState<number>(0);
+  const [pendingDocuments, setPendingDocuments] = useState<number>(0);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [timesheetLoading, setTimesheetLoading] = useState(true);
+
+  // Dynamic project state
+  const [projects, setProjects] = useState<Array<{ name: string; client?: string; status?: string }>>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [selectedProject, setSelectedProject] = useState<string>('');
 
   const statCards = [
     { 
-      title: '45', 
+      title: statsLoading ? '...' : totalEmployees.toString(), 
       subtitle: 'Total Employees', 
       icon: Users,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
-      trend: '+5 this month'
+      trend: 'Active employees'
     },
     { 
-      title: '8', 
+      title: statsLoading ? '...' : pendingLeaves.toString(), 
       subtitle: 'Pending Leaves', 
       icon: Clock,
       color: 'text-amber-600',
       bgColor: 'bg-amber-100',
-      trend: '3 urgent'
+      trend: 'Requires approval'
     },
     { 
-      title: '12', 
-      subtitle: 'Active Projects', 
+      title: statsLoading ? '...' : projects.length.toString(), 
+      subtitle: 'Total Projects', 
       icon: BarChart3,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
-      trend: '87% on track'
+      trend: `${activeProjects} active projects`
     },
     { 
-      title: '24', 
+      title: statsLoading ? '...' : pendingDocuments.toString(), 
       subtitle: 'Documents Pending', 
       icon: FileCheck,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100',
-      trend: '6 require review'
+      trend: 'Requires review'
     },
   ];
 
@@ -100,26 +135,7 @@ const AdminPanel = () => {
     { title: 'Settings', icon: Settings, path: '/admin/settings' },
   ];
 
-  const newsData = [
-    {
-      title: '📰 Monthly payroll processed by 25th',
-      description: 'Payroll deadline reminder',
-      image: '/payroll.jpg',
-      fullText: 'Payroll for the month will be completed by 25th.'
-    },
-    {
-      title: '🚨 Team review meeting this Friday',
-      description: 'Scheduled for 3 PM',
-      image: '/meeting.jpg',
-      fullText: 'Team-wide review meeting will be held this Friday at 3 PM.'
-    },
-    {
-      title: '📢 Remote Work HR Policy Updated',
-      description: 'Effective immediately',
-      image: '/remote-work.jpg',
-      fullText: 'New HR policy for remote work is effective immediately.'
-    },
-  ];
+  
 
   // Recent activities data
   const recentActivities = [
@@ -152,33 +168,479 @@ const AdminPanel = () => {
   const adminDesignation = localStorage.getItem('userDesignation') || localStorage.getItem('adminDesignation') || 'HR Manager';
   const adminDepartment = localStorage.getItem('userDepartment') || localStorage.getItem('adminDepartment') || 'Human Resources';
   const adminJoinedOn = localStorage.getItem('userJoinedOn') || localStorage.getItem('adminJoinedOn') || '01-Jan-2024';
-  const [selectedProject, setSelectedProject] = useState<string>('Project A');
+  
+  // URLs for fetching data
+  const EMPLOYEE_API_URL = 'https://script.google.com/macros/s/AKfycbxeKUf-9LFaMvH8tBa9jGuTMz5_h1Uk9N85cjtdNeyl1xLn16bDZqBZZPHonj-6Ba94_w/exec';
+  const PROJECT_API_URL = 'https://script.google.com/macros/s/AKfycbwWy9JiCu0WPRQjDyEe5tG6LrdQSxIYkLPJS94bsOJsQwRovMz24oADW9SaY3EddjwT/exec';
+  const LEAVE_API_URL = 'https://script.google.com/macros/s/AKfycbwiM7SKXbTc0EYAqDqUjRrwzJq8c2_8gYVd_tOi85TV1TRlqSxYI7x91YG4gHt65d5HWw/exec';
+  const DOC_API_URL = 'https://script.google.com/macros/s/AKfycbzcgXozG8UVlaZLUXe3BMJ_TrPS-VMBtkWftPOoUwJSq3ct1GHPAcfJ5Ly7hkcOfCFDXg/exec';
+  const TIMESHEET_API_URL = 'https://script.google.com/macros/s/AKfycbyo3pCBPS_ZvK6h4kQbmOU_cZtUnEr4Lw_SbuPZ9Zi3C6pLsk0CFxMYA196bvFwY0XcvA/exec';
 
-  const projectList = [
-    'Project A', 'Project B', 'Project C', 'Project D', 'Project E'
-  ];
+  // Dynamic project breakdown data
+  const [weeklyProjectBreakdown, setWeeklyProjectBreakdown] = useState<Record<string, { day: string; hours: number }[]>>({});
+  
+  // Function to fetch pending leaves for a specific employee (Dashboard.tsx pattern)
+  const fetchEmployeePendingLeaves = async (sheetId: string, employeeId: string): Promise<number> => {
+    try {
+      const callbackName = 'pendingLeaveCallback_' + Math.round(100000 * Math.random());
+      return await new Promise((resolve, reject) => {
+        (window as any)[callbackName] = (data: any) => {
+          let count = 0;
+          if (Array.isArray(data)) {
+            count = data.filter((entry: any) => entry.status?.toLowerCase() === 'pending').length;
+          } else if (data.leaveHistory) {
+            count = (data.leaveHistory as any[]).filter((entry: any) => entry.status?.toLowerCase() === 'pending').length;
+          }
+          console.log(`Employee ${employeeId} has ${count} pending leave requests`);
+          delete (window as any)[callbackName];
+          resolve(count);
+        };
+        const script = document.createElement('script');
+        script.src = `${LEAVE_API_URL}?sheetId=${sheetId}&callback=${callbackName}`;
+        script.onerror = () => {
+          delete (window as any)[callbackName];
+          console.error(`JSONP request failed for employee ${employeeId} leaves`);
+          resolve(0);
+        };
+        document.head.appendChild(script);
+      });
+    } catch (error) {
+      console.error(`Error fetching leaves for employee ${employeeId}:`, error);
+      return 0;
+    }
+  };
 
-  const weeklyProjectBreakdown: Record<string, { day: string; hours: number }[]> = {
-    'Project A': [
-      { day: 'Mon', hours: 4 }, { day: 'Tue', hours: 6 }, { day: 'Wed', hours: 5 },
-      { day: 'Thu', hours: 7 }, { day: 'Fri', hours: 5 },
-    ],
-    'Project B': [
-      { day: 'Mon', hours: 5 }, { day: 'Tue', hours: 5 }, { day: 'Wed', hours: 5 },
-      { day: 'Thu', hours: 5 }, { day: 'Fri', hours: 5 },
-    ],
-    'Project C': [
-      { day: 'Mon', hours: 2 }, { day: 'Tue', hours: 3 }, { day: 'Wed', hours: 4 },
-      { day: 'Thu', hours: 3 }, { day: 'Fri', hours: 4 },
-    ],
-    'Project D': [
-      { day: 'Mon', hours: 3 }, { day: 'Tue', hours: 4 }, { day: 'Wed', hours: 4 },
-      { day: 'Thu', hours: 3 }, { day: 'Fri', hours: 5 },
-    ],
-    'Project E': [
-      { day: 'Mon', hours: 6 }, { day: 'Tue', hours: 5 }, { day: 'Wed', hours: 6 },
-      { day: 'Thu', hours: 5 }, { day: 'Fri', hours: 6 },
-    ],
+  // Function to fetch pending documents for a specific employee (Dashboard.tsx pattern)
+  const fetchEmployeePendingDocs = async (spreadsheetId: string, employeeId: string): Promise<number> => {
+    try {
+      const formData = new URLSearchParams();
+      formData.append('action', 'getAllHistory');
+      formData.append('spreadsheetId', spreadsheetId);
+      const response = await fetch(DOC_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+        },
+        body: formData,
+      });
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data && Array.isArray(result.data)) {
+          const count = result.data.filter((req: any) => req.status?.toLowerCase() === 'pending').length;
+          console.log(`Employee ${employeeId} has ${count} pending document requests`);
+          return count;
+        } else {
+          console.log(`No document data found for employee ${employeeId}`);
+          return 0;
+        }
+      } else {
+        console.error(`Failed to fetch document requests for employee ${employeeId}`);
+        return 0;
+      }
+    } catch (error) {
+      console.error(`Error fetching documents for employee ${employeeId}:`, error);
+      return 0;
+    }
+  };
+
+  // Fetch all dynamic data
+  useEffect(() => {
+    const fetchAllData = async () => {
+      setStatsLoading(true);
+      setProjectsLoading(true);
+      setTimesheetLoading(true);
+
+      try {
+        // Use the Google Apps Script function to get all employees with action parameter
+        console.log('Fetching all employees using getAllEmployees action...');
+        
+        // Call the getAllEmployees function with action parameter
+        const employeesResponse = await fetch(`${TIMESHEET_API_URL}?action=getAllEmployees`);
+        const employeesData = await employeesResponse.json();
+        
+        console.log('✅ Employee data received:', employeesData);
+        console.log('✅ Employee count:', employeesData.length);
+        console.log('✅ First employee:', employeesData[0]);
+        
+        // Validate that we have an array
+        if (Array.isArray(employeesData) && employeesData.length > 0) {
+          setTotalEmployees(employeesData.length);
+          console.log(`✅ Successfully loaded ${employeesData.length} employees`);
+          
+          // Log employee structure for verification
+          console.log('Employee data structure:', {
+            totalEmployees: employeesData.length,
+            firstEmployee: employeesData[0],
+            hasSheetId: employeesData.every(emp => emp.SHEETID)
+          });
+        } else {
+          console.error('❌ Invalid employee data received, trying alternative endpoint');
+          
+          // Try alternative endpoint for employee data
+          console.log('Trying alternative employee endpoint...');
+          const altEmployeesResponse = await fetch(`${EMPLOYEE_API_URL}?type=employees`);
+          const altEmployeesData = await altEmployeesResponse.json();
+          
+          console.log('Alternative employee data:', altEmployeesData);
+          
+          if (Array.isArray(altEmployeesData) && altEmployeesData.length > 0) {
+            setTotalEmployees(altEmployeesData.length);
+            console.log(`✅ Successfully loaded ${altEmployeesData.length} employees from alternative endpoint`);
+            
+            // Use alternative data for further processing
+            await fetchProjectTimesheetData(altEmployeesData, []);
+            return;
+          } else {
+            console.error('❌ Both employee endpoints failed');
+            setTotalEmployees(0);
+            return;
+          }
+        }
+
+        // Fetch projects
+        console.log('Fetching projects...');
+        const projectsResponse = await fetch(`${PROJECT_API_URL}?action=list`);
+        const projectsData = await projectsResponse.json();
+        
+        console.log('Raw projects data:', projectsData);
+        
+        if (Array.isArray(projectsData)) {
+          // Filter for active projects only (like in Timesheet.tsx)
+          const activeProjectsData = projectsData.filter(p => 
+            p.status === 'Active' || p.status === 'active' || !p.status
+          );
+          
+          setProjects(activeProjectsData);
+          setActiveProjects(activeProjectsData.length);
+          console.log(`Found ${projectsData.length} total projects, ${activeProjectsData.length} active projects`);
+          console.log('Active projects:', activeProjectsData.map(p => p.name));
+          
+          // Set first active project as selected if none selected
+          if (activeProjectsData.length > 0 && !selectedProject) {
+            setSelectedProject(activeProjectsData[0].name);
+            console.log(`Selected first project: ${activeProjectsData[0].name}`);
+          }
+        } else {
+          console.error('Projects data is not an array:', typeof projectsData);
+          setProjects([]);
+          setActiveProjects(0);
+        }
+
+        // Fetch pending leaves and documents from ALL employees using their SHEETID
+        console.log('Fetching pending requests from all employees using their individual SHEETID...');
+        let totalPendingLeaves = 0;
+        let totalPendingDocs = 0;
+
+        // Process each employee to get their pending requests
+        for (const employee of employeesData) {
+          if (employee.SHEETID) {
+            console.log(`Processing employee ${employee.EMP_NAME} (ID: ${employee.EMP_ID}) with SHEETID: ${employee.SHEETID}`);
+            
+            // Fetch leave requests for this employee using their individual SHEETID
+            const leaveCount = await fetchEmployeePendingLeaves(employee.SHEETID, employee.EMP_ID);
+            totalPendingLeaves += leaveCount;
+
+            // Fetch document requests for this employee using their individual SHEETID
+            const docCount = await fetchEmployeePendingDocs(employee.SHEETID, employee.EMP_ID);
+            totalPendingDocs += docCount;
+          } else {
+            console.log(`Employee ${employee.EMP_NAME} has no SHEETID, skipping...`);
+          }
+        }
+
+        setPendingLeaves(totalPendingLeaves);
+        setPendingDocuments(totalPendingDocs);
+        console.log(`=== FINAL TOTALS ===`);
+        console.log(`Total pending leaves across all employees: ${totalPendingLeaves}`);
+        console.log(`Total pending documents across all employees: ${totalPendingDocs}`);
+        console.log(`Successfully processed ${employeesData.length} employees`);
+
+        // Fetch timesheet data for projects
+        console.log('Fetching timesheet data for projects...');
+        await fetchProjectTimesheetData(employeesData, projectsData || []);
+
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setStatsLoading(false);
+        setProjectsLoading(false);
+        setTimesheetLoading(false);
+      }
+    };
+
+    fetchAllData();
+  }, [selectedProject]);
+   const [newsData, setNewsData] = useState<NewsItem[]>([]);
+  useEffect(() => {
+    fetch(
+      'https://script.google.com/macros/s/AKfycbxdBeibvOx5xqJ4v6hCITckMdMGWefPCpta6sHL0lcySJMnlI0ycTX2vD8_5-fKST47/exec?action=getNews'
+    )
+      .then((res) => res.json())
+      .then(async (data) => {
+        // For each news item, fetch the base64 image
+        const updated = await Promise.all(
+          data.map(async (item) => {
+            if (item.imageId) {
+              const res = await fetch(
+                `https://script.google.com/macros/s/AKfycbxdBeibvOx5xqJ4v6hCITckMdMGWefPCpta6sHL0lcySJMnlI0ycTX2vD8_5-fKST47/exec?action=getImage&id=${item.imageId}`
+              );
+              const base64 = await res.text();
+              return {
+                ...item,
+                image: `data:image/png;base64,${base64}`, // 👈 Embed image as base64
+                fullText: `${item.description}\n\nClick to read more...`,
+              };
+            } else {
+              return {
+                ...item,
+                image: '', // No image available
+                fullText: `${item.description}\n\nClick to read more...`,
+              };
+            }
+          })
+        );
+  
+        setNewsData(updated);
+      })
+      .catch((err) => console.error('Failed to fetch news:', err));
+  }, []);
+  
+  // State to store full month project data for accurate monthly calculations
+  const [monthlyProjectData, setMonthlyProjectData] = useState<Record<string, number>>({});
+
+  // Fetch timesheet data for projects
+  const fetchProjectTimesheetData = async (employees: Array<{ EMP_ID: number; EMP_NAME: string }>, projects: Array<{ name: string; client?: string; status?: string }>) => {
+    if (!employees || !projects) {
+      console.log('No employees or projects data available');
+      return;
+    }
+
+    console.log('=== FETCHING PROJECT TIMESHEET DATA ===');
+    console.log('Processing', employees.length, 'employees and', projects.length, 'projects');
+
+    const projectBreakdown: Record<string, { day: string; hours: number }[]> = {};
+    const projectMonthlyTotals: Record<string, number> = {}; // Store full month totals for each project
+    
+    try {
+      // Fetch timesheet data for all employees
+      const timesheetPromises = employees.map(async (employee) => {
+        try {
+          const url = `${EMPLOYEE_API_URL}?type=timesheet&empId=${encodeURIComponent(employee.EMP_ID)}`;
+          console.log(`Fetching timesheet for ${employee.EMP_NAME} (ID: ${employee.EMP_ID})`);
+          const response = await fetch(url);
+          const timesheetData = await response.json();
+          
+          console.log(`Timesheet response for ${employee.EMP_NAME}:`, {
+            hasColumns: !!timesheetData.columns,
+            hasRows: !!timesheetData.rows,
+            columnCount: timesheetData.columns?.length || 0,
+            rowCount: timesheetData.rows?.length || 0
+          });
+          
+          return { employeeId: employee.EMP_ID, employeeName: employee.EMP_NAME, timesheet: timesheetData };
+        } catch (error) {
+          console.error(`Error fetching timesheet for employee ${employee.EMP_ID}:`, error);
+          return { employeeId: employee.EMP_ID, employeeName: employee.EMP_NAME, timesheet: null };
+        }
+      });
+
+      const timesheetResults = await Promise.all(timesheetPromises);
+      
+      // Process timesheet data to calculate project hours
+      const projectTotals: Record<string, Record<string, number>> = {}; // project -> day -> hours
+      
+      // Get current month info
+      const today = new Date();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
+      const currentDay = today.getDate();
+      
+      timesheetResults.forEach(({ employeeId, employeeName, timesheet }) => {
+        if (!timesheet || !timesheet.columns || !timesheet.rows) {
+          console.log(`No timesheet data for ${employeeName}`);
+          return;
+        }
+        
+        const { columns, rows } = timesheet;
+        console.log(`Processing timesheet for ${employeeName} with ${columns.length} columns and ${rows.length} rows`);
+        console.log(`First 3 columns:`, columns.slice(0, 3));
+        console.log(`First 3 rows:`, rows.slice(0, 3));
+        
+        // Debug: Check if we have any data at all in the timesheet
+        let hasAnyData = false;
+        rows.forEach((row, rowIndex) => {
+          row.forEach((cell, colIndex) => {
+            if (cell && typeof cell === 'string' && cell.trim() !== '') {
+              hasAnyData = true;
+              console.log(`📋 Found data at [${rowIndex}][${colIndex}]: ${cell.substring(0, 50)}${cell.length > 50 ? '...' : ''}`);
+            }
+          });
+        });
+        console.log(`📊 Employee ${employeeName} has data in timesheet: ${hasAnyData}`);
+        
+        // Get last 7 days for chart display
+        const last7Days = [];
+        for (let i = 6; i >= 0; i--) {
+          const date = new Date(today);
+          date.setDate(today.getDate() - i);
+          if (date.getDay() !== 0 && date.getDay() !== 6) { // Exclude weekends
+            last7Days.push({
+              date: date.toISOString().split('T')[0],
+              day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()]
+            });
+          }
+        }
+        
+        // Only take first 5 workdays for chart
+        const workDays = last7Days.slice(-5);
+        console.log('Target work days for chart:', workDays);
+        
+        // Process each date column in timesheet for BOTH chart and monthly data
+        columns.forEach((column, colIndex) => {
+          const columnDate = column.split('T')[0]; // Extract date part
+          const columnDateObj = new Date(columnDate);
+          
+          // Check if this date is in current month and already passed
+          const isCurrentMonth = columnDateObj.getMonth() === currentMonth && columnDateObj.getFullYear() === currentYear;
+          const isPastDate = columnDateObj.getDate() <= currentDay;
+          
+          console.log(`🔍 Processing column date: ${columnDate}`, {
+            isCurrentMonth,
+            isPastDate,
+            columnMonth: columnDateObj.getMonth(),
+            currentMonth,
+            columnYear: columnDateObj.getFullYear(),
+            currentYear,
+            columnDay: columnDateObj.getDate(),
+            currentDay
+          });
+          
+          // For chart display (recent week only)
+          const workDay = workDays.find(wd => wd.date === columnDate);
+          
+          if (workDay) {
+            console.log(`✅ Processing ${employeeName} timesheet for CHART: ${columnDate} (${workDay.day})`);
+          }
+          
+          // For monthly calculation (include ALL dates with data for now to get ANY timesheet data)
+          // Later we can make this more restrictive once we have data showing
+          const shouldProcessForMonthly = true; // Process ALL dates with data for debugging
+          
+          if (shouldProcessForMonthly) {
+            console.log(`📅 Processing ${employeeName} timesheet for MONTHLY: ${columnDate}`);
+            
+            // Process all entries for this date
+            rows.forEach((row, rowIndex) => {
+              const cellValue = row[colIndex];
+              if (cellValue && typeof cellValue === 'string' && cellValue.trim() !== '') {
+                console.log(`📋 Found data in cell [${rowIndex}][${colIndex}]: ${cellValue}`);
+                
+                // Handle multiple entries separated by '||'
+                const entries = cellValue.split('||');
+                entries.forEach(entry => {
+                  const parts = entry.split('|');
+                  if (parts.length >= 4) {
+                    const projectName = parts[0]?.trim();
+                    const task = parts[1]?.trim();
+                    const startTime = parts[2]?.trim();
+                    const endTime = parts[3]?.trim();
+                    
+                    console.log(`🎯 Entry parts:`, { projectName, task, startTime, endTime });
+                    
+                    // Calculate hours if both start and end times exist
+                    if (projectName && startTime && endTime) {
+                      try {
+                        const start = new Date(`2000-01-01 ${startTime}`);
+                        const end = new Date(`2000-01-01 ${endTime}`);
+                        const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+                        
+                        console.log(`⏰ Time calculation: ${startTime} to ${endTime} = ${hours} hours`);
+                        
+                        if (hours > 0) {
+                          // For chart data (recent week only)
+                          if (workDay) {
+                            if (!projectTotals[projectName]) {
+                              projectTotals[projectName] = {};
+                            }
+                            if (!projectTotals[projectName][workDay.day]) {
+                              projectTotals[projectName][workDay.day] = 0;
+                            }
+                            projectTotals[projectName][workDay.day] += hours;
+                            console.log(`📊 Added ${hours.toFixed(2)} hours to "${projectName}" on ${workDay.day} (${columnDate}) for ${employeeName}`);
+                          }
+                          
+                          // For monthly totals (all dates with data for now)
+                          if (!projectMonthlyTotals[projectName]) {
+                            projectMonthlyTotals[projectName] = 0;
+                          }
+                          projectMonthlyTotals[projectName] += hours;
+                          console.log(`📅 Added ${hours.toFixed(2)} hours to MONTHLY total for "${projectName}" on ${columnDate} for ${employeeName}`);
+                        }
+                      } catch (error) {
+                        console.error(`Error calculating hours for ${projectName}:`, error);
+                      }
+                    }
+                  }
+                });
+              }
+            });
+          } else {
+            console.log(`⏭️ Skipping ${columnDate} (not in target criteria)`);
+          }
+        });
+      });
+      
+      // Convert projectTotals to the format expected by the chart
+      // Keep X-axis labels normal, but shift the bar data by one day
+      const displayDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']; // Keep normal X-axis labels
+      const dataDays = ['Fri', 'Mon', 'Tue', 'Wed', 'Thu']; // Data shifted: Fri->Mon, Mon->Tue, etc.
+      
+      projects.forEach(project => {
+        const projectData = projectTotals[project.name] || {};
+        
+        // Map shifted data to normal display labels
+        projectBreakdown[project.name] = displayDays.map((displayDay, index) => ({
+          day: displayDay, // Keep normal X-axis label
+          hours: Math.round((projectData[dataDays[index]] || 0) * 10) / 10 // Use shifted day's data
+        }));
+        
+        const totalHours = projectBreakdown[project.name].reduce((sum, entry) => sum + entry.hours, 0);
+        console.log(`📈 Project "${project.name}" with shifted bars (Fri data->Mon bar, Mon data->Tue bar, etc.):`, 
+          projectBreakdown[project.name].map((entry, i) => `${entry.day} bar: ${entry.hours}h (from ${dataDays[i]} data)`).join(', '),
+          `(Total: ${totalHours} hours)`
+        );
+        
+        // Initialize monthly total if not exists
+        if (!projectMonthlyTotals[project.name]) {
+          projectMonthlyTotals[project.name] = 0;
+        }
+      });
+      
+      console.log('=== MONTHLY PROJECT TOTALS ===');
+      Object.entries(projectMonthlyTotals).forEach(([project, hours]) => {
+        console.log(`${project}: ${hours.toFixed(2)} hours (completed dates only)`);
+      });
+      
+      // Store monthly data for calculations
+      setMonthlyProjectData(projectMonthlyTotals);
+      
+      console.log('=== PROJECT TIMESHEET PROCESSING COMPLETE ===');
+      
+    } catch (error) {
+      console.error('Error processing timesheet data:', error);
+      
+      // Fallback to empty data structure with normal X-axis labels
+      const fallbackDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']; // Keep normal labels
+      projects.forEach(project => {
+        projectBreakdown[project.name] = fallbackDays.map(day => ({ day, hours: 0 }));
+        projectMonthlyTotals[project.name] = 0;
+      });
+      setMonthlyProjectData(projectMonthlyTotals);
+      console.log('Using fallback empty data structure with normal X-axis labels');
+    }
+    
+    setWeeklyProjectBreakdown(projectBreakdown);
   };
 
   const [clickedBar, setClickedBar] = useState<{ day: string; hours: number } | null>(null);
@@ -252,11 +714,17 @@ const AdminPanel = () => {
             EMPWR - Employee Management Platform for Workforce and Reporting
           </span>
 
-          <NotificationBell />
+          <button
+                  onClick={() => navigate('/admin/notifications')}
+                  className="relative text-green-800 hover:text-green-900"
+                >
+                  <Bell className="h-5 w-5" />
+                </button>
           <div className="relative" ref={profileRef}>
             <button
               onClick={() => setIsProfileOpen(prev => !prev)}
               className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors"
+              title="User Profile Menu"
             >
               <User className="w-5 h-5 text-primary" />
             </button>
@@ -278,7 +746,10 @@ const AdminPanel = () => {
 
                 <button
                   onClick={() => {
+                    console.log('AdminPanel logout initiated...');
+                    console.log('localStorage before clear:', { ...localStorage });
                     localStorage.clear();
+                    console.log('localStorage after clear:', { ...localStorage });
                     navigate('/');
                   }}
                   className="w-full px-4 py-2 text-left text-destructive hover:bg-destructive/10 flex items-center gap-2 rounded-b-lg"
@@ -311,11 +782,10 @@ const AdminPanel = () => {
         </aside>
 
         <main className="flex-1 px-6 py-6 overflow-y-auto">
-          {/* Scrolling news banner */}
-          <div className="mb-6 overflow-hidden">
-  <div className="relative w-full">
-    <div className="flex space-x-6 animate-scroll-x px-4">
-      {[...newsData, ...newsData].map((item, idx) => (
+          <div className="w-full bg-transparent px-0 -mt-2 mb-2">
+  <div className="overflow-hidden w-full">
+    <div className="flex animate-scroll-left items-center space-x-6 pl-4 pr-6">
+      {newsData.map((item, idx) => (
         <div
           key={idx}
           onClick={() => setSelectedNews(item)}
@@ -404,10 +874,41 @@ const AdminPanel = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
                   {/* LEFT SIDE: Summary Section */}
                   <div className="space-y-4">
-                    {selectedProject && (() => {
+                    {timesheetLoading ? (
+                      <div className="space-y-3">
+                        <div className="bg-muted p-4 rounded-lg shadow-sm animate-pulse">
+                          <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                          <div className="h-6 bg-gray-300 rounded"></div>
+                        </div>
+                        <div className="bg-muted p-4 rounded-lg shadow-sm animate-pulse">
+                          <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                          <div className="h-6 bg-gray-300 rounded"></div>
+                        </div>
+                        <div className="bg-muted p-4 rounded-lg shadow-sm animate-pulse">
+                          <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                          <div className="h-6 bg-gray-300 rounded"></div>
+                        </div>
+                      </div>
+                    ) : selectedProject && (() => {
                       const weeklyData = weeklyProjectBreakdown[selectedProject] || [];
                       const totalWeeklyHours = weeklyData.reduce((sum, entry) => sum + entry.hours, 0);
-                      const averageMonthlyHours = totalWeeklyHours * 4;
+                      
+                      // Calculate monthly hours using actual timesheet data for completed dates
+                      const today = new Date();
+                      const currentDay = today.getDate(); // Current day of the month (1-31)
+                      const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate(); // Total days in current month
+                      
+                      // Get actual hours from timesheet for completed dates (from monthlyProjectData)
+                      const actualMonthlyHours = monthlyProjectData[selectedProject] || 0;
+                      
+                      // Future dates have 0 hours (no prediction, just actual data)
+                      const futureHours = 0;
+                      
+                      // Total monthly hours = actual completed hours + 0 for future dates
+                      const totalMonthlyHours = actualMonthlyHours + futureHours;
+                      
+                      // Average = total monthly hours ÷ total days in month
+                      const averageHoursPerDay = totalMonthlyHours / daysInMonth;
 
                       return (
                         <div className="space-y-3">
@@ -417,11 +918,17 @@ const AdminPanel = () => {
                           </div>
                           <div className="bg-muted p-4 rounded-lg shadow-sm">
                             <p className="text-sm text-gray-500">Total Weekly Hours</p>
-                            <p className="text-xl font-bold text-primary">{totalWeeklyHours} hrs</p>
+                            <p className="text-xl font-bold text-primary">{totalWeeklyHours.toFixed(1)} hrs</p>
                           </div>
                           <div className="bg-muted p-4 rounded-lg shadow-sm">
-                            <p className="text-sm text-gray-500">Average Monthly Hours</p>
-                            <p className="text-xl font-bold text-primary">{averageMonthlyHours} hrs</p>
+                            <p className="text-sm text-gray-500">Total Monthly Hours</p>
+                            <p className="text-xl font-bold text-primary">{totalMonthlyHours.toFixed(1)} hrs</p>
+                            <p className="text-xs text-gray-400">
+                              {actualMonthlyHours.toFixed(1)}h actual + {futureHours.toFixed(1)}h future
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {currentDay} days completed, {daysInMonth - currentDay} remaining | Avg: {averageHoursPerDay.toFixed(1)}h/day
+                            </p>
                           </div>
                         </div>
                       );
@@ -430,11 +937,19 @@ const AdminPanel = () => {
 
                   {/* RIGHT SIDE: Enhanced Bar Chart */}
                   <div className="col-span-2 w-full h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart 
-                        data={weeklyProjectBreakdown[selectedProject]}
-                        margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
-                      >
+                    {timesheetLoading ? (
+                      <div className="w-full h-full flex items-center justify-center bg-muted rounded-lg">
+                        <div className="text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                          <p className="text-sm text-muted-foreground">Loading timesheet data...</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart 
+                          data={weeklyProjectBreakdown[selectedProject] || []}
+                          margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
+                        >
                         <defs>
                           <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#5eead4" stopOpacity={1}/>
@@ -513,7 +1028,8 @@ const AdminPanel = () => {
                       />
                       </BarChart>
                     </ResponsiveContainer>
-                    {clickedBar && (
+                    )}
+                    {clickedBar && !timesheetLoading && (
                       <div className="flex justify-center mt-4">
                         <div className="bg-white/90 border border-primary/20 rounded-xl shadow px-6 py-3 text-center">
                           <p className="text-sm text-gray-600">You clicked on:</p>
@@ -541,16 +1057,21 @@ const AdminPanel = () => {
 
   <CardContent>
     <div className="space-y-3">
-      {projectList.map((project, idx) => {
-        const weeklyData = weeklyProjectBreakdown[project] || [];
+      {projectsLoading ? (
+        <div className="text-center py-4 text-muted-foreground">Loading projects...</div>
+      ) : projects.length === 0 ? (
+        <div className="text-center py-4 text-muted-foreground">No projects found</div>
+      ) : (
+        projects.map((project, idx) => {
+        const weeklyData = weeklyProjectBreakdown[project.name] || [];
         const totalHours = weeklyData.reduce((sum, entry) => sum + entry.hours, 0);
-        const isSelected = selectedProject === project;
+        const isSelected = selectedProject === project.name;
 
         return (
           <div
             key={idx}
             onClick={() => {
-            setSelectedProject(project);
+            setSelectedProject(project.name);
             setClickedBar(null); // clear previous bar selection
           }}
 
@@ -561,7 +1082,7 @@ const AdminPanel = () => {
             }`}
           >
             <div className="flex justify-between items-center mb-1">
-              <h4 className="text-sm font-semibold">{project}</h4>
+              <h4 className="text-sm font-semibold">{project.name}</h4>
               <span
                 className={`text-xs px-2 py-0.5 rounded-full ${
                   totalHours >= 30
@@ -576,51 +1097,77 @@ const AdminPanel = () => {
             </div>
             <div className="w-full bg-gray-200 h-2 rounded-full">
               <div
-                className={`h-2 rounded-full ${
+                className={`h-2 rounded-full transition-all ${
                   totalHours >= 30
                     ? 'bg-green-500'
                     : totalHours >= 15
                     ? 'bg-gray-400'
                     : 'bg-red-400'
                 }`}
-                style={{ width: `${(totalHours / 40) * 100}%` }}
+                {...({
+                  style: {
+                    width: `${Math.min((totalHours / 40) * 100, 100)}%`
+                  }
+                })}
               />
             </div>
           </div>
         );
-      })}
+      }))}
     </div>
   </CardContent>
 </Card>
 
           </div>
 
-          {/* News modal */}
+          {/* News Modal */}
           {selectedNews && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-8 overflow-auto">
-              <div className="bg-card rounded-2xl shadow-xl w-[90%] max-w-5xl p-8 relative border border-border">
-                <h2 className="text-3xl font-bold text-primary mb-4">{selectedNews.title}</h2>
-                {selectedNews.image && (
-                  <img
-                    src={selectedNews.image}
-                    alt="News"
-                    className="rounded-xl w-full h-64 object-cover mb-6 shadow-md"
-                  />
-                )}
-                <p className="text-card-foreground text-lg leading-relaxed mb-8 whitespace-pre-line">
-                  {selectedNews.fullText}
-                </p>
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => setSelectedNews(null)}
-                    className="bg-primary/10 text-primary px-6 py-2 rounded-lg hover:bg-primary/20 transition-colors font-semibold"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4 py-8 overflow-auto">
+    <div className="bg-white rounded-2xl shadow-xl w-[90%] max-w-4xl p-8 relative">
+      <h2 className="text-3xl font-bold text-green-800 mb-4">
+        {selectedNews.title}
+      </h2>
+
+      {selectedNews.image ? (
+        <>
+          <a
+            href={selectedNews.image}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block mb-4 text-blue-600 underline text-sm"
+          >
+            View Image in New Tab
+          </a>
+          <img
+            src={selectedNews.image}
+
+            alt="News"
+            className="rounded-xl w-full h-64 object-cover mb-6 shadow"
+            onError={(e) => {
+              // Hide broken images
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        </>
+      ) : (
+        <p className="text-gray-500 italic mb-4">No image preview available.</p>
+      )}
+
+      <p className="text-gray-800 text-lg leading-relaxed mb-8 whitespace-pre-line">
+        {selectedNews.fullText}
+      </p>
+
+      <div className="flex justify-end">
+        <button
+          onClick={() => setSelectedNews(null)}
+          className="bg-green-100 text-green-800 px-6 py-2 rounded hover:bg-green-200 transition text-base font-semibold"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
         </main>
       </div>
     </div>

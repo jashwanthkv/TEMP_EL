@@ -10,6 +10,7 @@ import {
 } from 'date-fns';
 import { Home, Bell, User, UserCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import RequireLogin from '@/components/ui/RequireLogin';
 
 interface Event {
   Title: string;
@@ -22,6 +23,9 @@ const BACKEND_URL =
   'https://script.google.com/macros/s/AKfycbxg9PC7Mp0bFu_aJ3iT9TclwPuuMq_ShXy-5-RsoL52jXy38R2m2V_7PJKkloBhZ4iY/exec';
 
 const CompanyCalendar: React.FC = () => {
+  if (!localStorage.getItem('userEmail')) {
+    return <RequireLogin />;
+  }
   const navigate = useNavigate();
   const today = new Date();
   const [events, setEvents] = useState<Event[]>([]);
@@ -30,6 +34,16 @@ const CompanyCalendar: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  // Loading Spinner Component
+  const LoadingSpinner = () => (
+    <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
+      <div className="flex flex-col items-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-300 border-t-green-500"></div>
+        <p className="mt-4 text-lg font-semibold text-gray-700">Loading Calendar Data...</p>
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -63,27 +77,23 @@ const CompanyCalendar: React.FC = () => {
     setModalOpen(false);
   };
 
-  // Only show loading skeletons on first load, not on tab switch
   useEffect(() => {
-    let firstLoad = true;
     const fetchEvents = async () => {
-      if (firstLoad) setLoading(true);
+      setLoading(true);
       try {
         const res = await fetch(`${BACKEND_URL}?action=upcoming`);
         const data = await res.json();
-        console.log('Fetched backend event data:', data);
         setEvents(data.events || []);
       } catch (err) {
         console.error('Failed to load events:', err);
       } finally {
-        if (firstLoad) setLoading(false);
-        firstLoad = false;
+        setLoading(false);
       }
     };
 
     fetchEvents();
     const onFocus = () => {
-      fetchEvents(); // Do not set loading to true on tab switch
+      fetchEvents();
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
@@ -103,7 +113,14 @@ const CompanyCalendar: React.FC = () => {
     days.push(d);
   }
 
+  // Show loading spinner until all data is loaded
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
   return (
+  // Main content after loading
+  
     <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 pb-20">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
@@ -119,14 +136,13 @@ const CompanyCalendar: React.FC = () => {
           <span className="text-lg font-bold text-green-700">EMPWR</span>
 
           <button
-  onClick={() => navigate('/notifications')}
-  className="relative text-green-800 hover:text-green-900"
->
-  <Bell className="h-5 w-5" />
-</button>
+            onClick={() => navigate('/notifications')}
+            className="relative text-green-800 hover:text-green-900"
+          >
+            <Bell className="h-5 w-5" />
+          </button>
 
-
-          {/* Profile Dropdown (Click-based) */}
+          {/* Profile Dropdown */}
           <div className="relative" ref={profileRef}>
             <button
               onClick={() => setIsProfileOpen(prev => !prev)}
@@ -165,76 +181,60 @@ const CompanyCalendar: React.FC = () => {
       <main className="max-w-[1600px] mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-[700px]">
         {/* Calendar */}
         <div className="order-1 lg:order-2 bg-white rounded-xl shadow-md p-4 lg:col-span-3 flex flex-col min-h-full">
-          {loading ? (
-            <div className="text-center py-10 text-green-600 font-semibold">Loading events...</div>
-          ) : (
-            <div className="grid grid-cols-7 gap-px flex-1">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-                <div key={day} className="font-semibold text-gray-600 py-2 bg-slate-50 text-center">
-                  {day}
-                </div>
-              ))}
-              {days.map((day, i) => {
-                const eventCount = getEventsForDate(day).length;
-                const isCurrentMonth = day.getMonth() === today.getMonth() && day.getFullYear() === today.getFullYear();
-                // If current month and no events, highlight in blue. If events, use event color.
-                const cellColor = eventCount > 0 ? getBoxColor(eventCount) : (isCurrentMonth ? 'bg-blue-50' : getBoxColor(eventCount));
-                return (
-                  <div
-                    key={i}
-                    onClick={() => handleDateClick(day)}
-                    className={`relative h-28 p-1 border cursor-pointer flex flex-col justify-center items-center text-center ${cellColor}`}
-                  >
-                    <div className="absolute top-1 right-1 text-[10px] text-gray-600">
-                      {format(day, 'd')}
-                    </div>
-                    {eventCount > 0 && (
-                      <div className="font-bold text-gray-800 text-sm text-center">
-                        {eventCount} {eventCount > 1 ? 'events' : 'event'}
-                      </div>
-                    )}
+          <div className="grid grid-cols-7 gap-px flex-1">
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+              <div key={day} className="font-semibold text-gray-600 py-2 bg-slate-50 text-center">
+                {day}
+              </div>
+            ))}
+            {days.map((day, i) => {
+              const eventCount = getEventsForDate(day).length;
+              const isCurrentMonth = day.getMonth() === today.getMonth() && day.getFullYear() === today.getFullYear();
+              const cellColor = eventCount > 0 ? getBoxColor(eventCount) : (isCurrentMonth ? 'bg-blue-50' : getBoxColor(eventCount));
+              return (
+                <div
+                  key={i}
+                  onClick={() => handleDateClick(day)}
+                  className={`relative h-28 p-1 border cursor-pointer flex flex-col justify-center items-center text-center ${cellColor}`}
+                >
+                  <div className="absolute top-1 right-1 text-[10px] text-gray-600">
+                    {format(day, 'd')}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  {eventCount > 0 && (
+                    <div className="font-bold text-gray-800 text-sm text-center">
+                      {eventCount} {eventCount > 1 ? 'events' : 'event'}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Upcoming Events */}
         <div className="order-2 lg:order-1 bg-white rounded-xl shadow-md p-6 space-y-4 flex flex-col min-h-full" style={{ height: '600px' }}>
           <h2 className="text-lg font-bold text-green-700">Upcoming Events</h2>
           <div className="overflow-y-auto" style={{ height: '100%' }}>
-            {loading ? (
-              <ul className="space-y-3">
-                {Array(3).fill(0).map((_, idx) => (
-                  <li key={idx} className="bg-green-50 p-3 rounded-md shadow animate-pulse">
-                    <div className="h-4 w-32 bg-green-100 rounded mb-2" />
-                    <div className="h-3 w-24 bg-green-100 rounded" />
+            <ul className="space-y-3">
+              {events
+                .filter((ev) => {
+                  const evDate = parseDate(ev.Date);
+                  return evDate && evDate >= today;
+                })
+                .sort((a, b) => {
+                  const d1 = parseDate(a.Date)?.getTime() || 0;
+                  const d2 = parseDate(b.Date)?.getTime() || 0;
+                  return d1 - d2;
+                })
+                .map((ev, i) => (
+                  <li key={i} className="bg-green-50 p-3 rounded-md shadow">
+                    <p className="font-bold text-green-800 text-sm">{ev.Title}</p>
+                    <p className="text-xs text-gray-500">
+                      {format(parseDate(ev.Date)!, 'EEE, dd MMM yyyy')}
+                    </p>
                   </li>
                 ))}
-              </ul>
-            ) : (
-              <ul className="space-y-3">
-                {events
-                  .filter((ev) => {
-                    const evDate = parseDate(ev.Date);
-                    return evDate && evDate >= today;
-                  })
-                  .sort((a, b) => {
-                    const d1 = parseDate(a.Date)?.getTime() || 0;
-                    const d2 = parseDate(b.Date)?.getTime() || 0;
-                    return d1 - d2;
-                  })
-                  .map((ev, i) => (
-                    <li key={i} className="bg-green-50 p-3 rounded-md shadow">
-                      <p className="font-bold text-green-800 text-sm">{ev.Title}</p>
-                      <p className="text-xs text-gray-500">
-                        {format(parseDate(ev.Date)!, 'EEE, dd MMM yyyy')}
-                      </p>
-                    </li>
-                  ))}
-              </ul>
-            )}
+            </ul>
           </div>
         </div>
       </main>
@@ -261,15 +261,12 @@ const CompanyCalendar: React.FC = () => {
             {getEventsForDate(selectedDate).length > 0 ? (
               <ul className="space-y-4">
                 {getEventsForDate(selectedDate).map((ev, i) => {
-                  // Spreadsheet times are like '11.15', '9.30', '10.00', etc.
                   let formattedTime = 'N/A';
                   if (ev.Time) {
                     const raw = ev.Time.trim().replace(/"/g, '');
-                    // If already has AM/PM, just show as is
                     if (/am|pm/i.test(raw)) {
                       formattedTime = raw;
                     } else {
-                      // Accept both ':' and '.' as separator
                       let parts = raw.includes('.') ? raw.split('.') : raw.split(':');
                       if (parts.length === 2) {
                         let hour = parseInt(parts[0], 10);
@@ -283,7 +280,6 @@ const CompanyCalendar: React.FC = () => {
                         }
                         formattedTime = `${hour}:${minute.toString().padStart(2, '0')} ${ampm}`;
                       } else if (parts.length === 1) {
-                        // Only hour provided, treat as hour:00
                         let hour = parseInt(parts[0], 10);
                         let ampm = 'AM';
                         if (hour >= 12) {
